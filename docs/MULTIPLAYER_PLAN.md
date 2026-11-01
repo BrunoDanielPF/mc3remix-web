@@ -29,6 +29,8 @@ O shell web agora oferece **Jogar solo** e **Multiplayer** antes de iniciar a in
 
 O botão de Multiplayer diz **Abrir jogo para testar LAN**. A conexão da sala alcança o dispositivo SMAP emulado quando as flags diagnósticas estão ativas; essa ponte já permitiu usar os menus originais para descobrir e entrar em uma partida Cruise. O seletor Solo/Multiplayer pertence ao shell web; os menus **NETWORKING**, **Host Game**, **Join Game** e **LOBBY** são renderizados pelo jogo. O aviso atual delimita a fase experimental e os modos que ainda precisam de validação.
 
+Para testar um relay em VPS sem enviar a ISO ou o build derivado do jogo, a página local aceita `relay-url=wss://DOMINIO_COMPLETO`. O shell rejeita `ws://` fora de loopback e inclui o endereço do relay no convite copiado. O serviço deve permitir explicitamente a origem `http://127.0.0.1:8620` (ou a origem local efetivamente usada). Esta integração de URL foi verificada por sintaxe; ainda falta o ensaio WSS em duas máquinas, pois o destino e o acesso ao VPS não foram definidos. O procedimento e os limites da publicação estão em [VPS_DEPLOYMENT.md](VPS_DEPLOYMENT.md).
+
 Validação da interface: em prévia isolada e depois no build WebAssembly principal, o modo Solo terminou o carregamento com **Jogar solo** habilitado. Multiplayer manteve o Start bloqueado até a sala conectar; duas abas entraram na mesma sala, ambas exibiram dois participantes e voltar a Solo removeu o segundo participante. A aba de campanha existente não foi recarregada. A validação foi de interface e transporte, não de corrida.
 
 ## Estratégia preferida

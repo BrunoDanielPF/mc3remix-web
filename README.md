@@ -1,65 +1,88 @@
-# Midnight Club 3: DUB Edition Remix no navegador
+# Midnight Club 3: DUB Edition Remix — Web Port
 
-Objetivo: executar a edição **PlayStation 2 USA** de *Midnight Club 3: DUB Edition Remix* no navegador por recompilação estática, em uma máquina local.
+An experimental browser port of the **PlayStation 2 NTSC-U** release of *Midnight Club 3: DUB Edition Remix*. The game runs locally through static recompilation of its PS2 executable to C++ and WebAssembly, with a PS2 runtime and WebGPU renderer. This project builds on [ps2-web-recomp](https://github.com/snuri00/ps2-web-recomp); [nfsu2-web](https://github.com/th0mk/nfsu2-web) is an architectural reference.
 
-## Cópia identificada
+**Status:** A local build boots, reaches the original menus, and drives in San Diego Cruise. Two browser instances have started and driven in the same original LAN Ordered Race. This is a research prototype: multiplayer results, long sessions, sound and save persistence still need validation, and performance on integrated GPUs is below the playable target.
 
-A imagem presente em Downloads foi identificada por leitura do formato ISO 9660, sem execução do jogo:
+![Two-player Ordered Race in the browser](docs/evidence/web-ordered-race-guest-track.png)
 
-- Volume: `MC3REMIX`
-- Executável de boot: `SLUS_213.55`
-- `SYSTEM.CNF`: `BOOT2 = cdrom0:\SLUS_213.55;1`, `VMODE = NTSC`
-- Tamanho: 8.539.963.392 bytes
-- SHA-256: `DE199F7E7F57B7CB603A129217F7482D50644FD66558450DFEB5612857B732F9`
+## What works today
 
-Essa é uma imagem de **PS2 Remix**. O plano anterior, baseado no `default.xbe` de Xbox do `mcdub3-nx`, foi substituído. O [plano técnico](docs/PORTING_PLAN.md) documenta a nova base, a prova local e os próximos critérios de aceitação.
+- **Game boot and driving:** the PS2 opening, title screen, memory card prompt, original menus, Arcade selection, and San Diego Cruise render in the browser.
+- **Local execution:** the PS2 Emotion Engine executable is translated ahead of time; the browser runs the generated WebAssembly, emulates the remaining hardware, renders through WebGPU, and streams disc sectors on demand through HTTP Range requests.
+- **Controls and saves:** keyboard, gamepad, and touch input; aspect ratio, resolution and fullscreen controls; a browser-backed virtual PS2 memory card with import and export controls. Long-session save and restore still need end-to-end validation.
+- **Multiplayer prototype:** the web shell offers Solo and Multiplayer, a player name without an account, room creation and invitations. A WebSocket relay forwards binary packets, while an opt-in virtual LAN bridge connects them to the emulated PS2 network adapter. Two instances discovered each other through the game's original **NETWORKING → Host Game / Join Game** flow, entered the original lobby, and started **Ordered Race — Rites of Passage**. Both displayed positions **1/2** and **2/2**, moved independently, and rendered the remote car. Finishing the race and final results have not been verified.
+- **Performance diagnostics:** reproducible save states, frame-window benchmarks, GPU/CPU counters, disc-read counters, visual captures, and opt-in renderer experiments. Selective disc preloading eliminated network reads in one Cruise test window but did not materially improve FPS; the graphics path remains the main optimization target.
 
-## Base do porte
+The [porting plan](docs/PORTING_PLAN.md), [multiplayer log](docs/MULTIPLAYER_PLAN.md), [performance report](docs/PERFORMANCE.md), [performance checkpoint](docs/PERFORMANCE_CHECKPOINT.md), and [UI asset map](docs/UI_ASSETS.md) contain the test conditions and remaining work.
 
-O projeto [ps2-web-recomp](https://github.com/snuri00/ps2-web-recomp) transforma o executável R5900 de uma ISO de PS2 em C++ e WebAssembly, com runtime de PS2 e WebGPU. Revisão examinada: `333999564ad0fe84f24b504416869dc182404a61`. O [nfsu2-web](https://github.com/th0mk/nfsu2-web) continua como referência de arquitetura e validação para jogos recompilados no navegador.
+## Performance checkpoint
 
-O código fonte da base, sob licença MIT, está em [`engine/`](engine/). A ISO, o código gerado do jogo e os builds ficam fora do Git. O servidor de teste deve escutar apenas em `127.0.0.1`, pois disponibiliza os dados da ISO a quem conseguir acessá-lo. O [ponto de retomada dos testes de FPS](docs/PERFORMANCE_CHECKPOINT.md), o [relatório completo](docs/PERFORMANCE.md), o [plano do caminho gráfico direto](docs/GS_RENDER_FAST_PATH.md), o [plano de multiplayer](docs/MULTIPLAYER_PLAN.md) e o [mapa de recursos visuais e menus](docs/UI_ASSETS.md) registram o estado técnico.
+| Scene and environment | Observed display rate | Scope |
+| --- | ---: | --- |
+| San Diego Cruise, Edge on NVIDIA Ampere | **57.22 FPS** | 120-frame benchmark, 640 × 512, with `PS2_CHUNK_WRITES=1`; p95 frame interval was 49.9 ms. |
+| Same Cruise state, Intel Gen12-LP | **about 3.1–3.4 FPS** | Browser measurements on this machine; below the 30 FPS playable floor. |
+| Two-player Ordered Race, two Edge windows | **about 22–23 FPS** | Short diagnostic captures with both clients and race capture active; not a controlled release benchmark. |
 
-## Versionamento
+The target is approximately **60 displayed FPS**, with **30 FPS** as the minimum playable rate. Each player's browser renders its own frames; a VPS can serve files and relay network packets, but its GPU cannot increase the client's FPS. These measurements do not establish campaign or broad hardware performance.
 
-O repositório público contém código fonte e documentação. `main` registra a base inicial; `develop` é a linha de trabalho para as próximas mudanças, com commits específicos por alteração. A ISO, cartões de memória, estados salvos, código recompilado a partir do jogo, dependências e builds permanecem locais e ignorados pelo Git. A licença MIT da base está em [`engine/LICENSE`](engine/LICENSE); uma licença para o projeto como um todo ainda não foi definida.
+## Build and run locally
 
-## Estado
+Use your own PS2 Remix disc image. The tested image has volume label `MC3REMIX`, boot executable `SLUS_213.55`, and size **8,539,963,392 bytes**. The ISO, translated game code, generated WebAssembly, saves, and build outputs are intentionally excluded from this repository.
 
-O pipeline reconheceu a ISO, recompilou o executável e concluiu os builds nativo e WebAssembly. No navegador, percorri a abertura, a tela inicial, o aviso de cartão de memória, o menu principal e entrei em **Arcade → San Diego → Cruise**. A cidade, o carro e o painel foram renderizados. No Cruise controlado, a Intel Gen12-LP exibiu cerca de **3,1–3,4 FPS**, enquanto o Edge com NVIDIA Ampere exibiu **57,22 FPS** em 120 quadros. Duas instâncias também largaram e avançaram na mesma corrida LAN **Ordered Race — Rites of Passage**; a chegada e o resultado final continuam pendentes. Áudio e salvamento de uma sessão longa ainda não foram validados. Evidências e próximos passos: [plano técnico](docs/PORTING_PLAN.md), [plano multiplayer](docs/MULTIPLAYER_PLAN.md) e [ponto de retomada de FPS](docs/PERFORMANCE_CHECKPOINT.md).
-
-O alvo é **60 FPS exibidos**, com **30 FPS como mínimo jogável**. O estado salvo no Cruise mediu cerca de 3,1 FPS exibidos no navegador integrado. O perfil encontrou cerca de 1.575 dispatches WebGPU por imagem. Um protótipo opcional de fusão de uploads pequenos e paletas reduziu 28,7% dos dispatches em 81 quadros e elevou o FPS exibido de 3,11/3,13 para 3,34/3,34 em duas comparações; quatro capturas nativas ficaram idênticas. A opção continua desligada por padrão. O grafo de dependências agora registra VRAM, CLUT, textura decodificada e scratch para orientar um caminho mais amplo de renderização. Método, limites e próximos passos: [desempenho](docs/PERFORMANCE.md).
-
-O pré-carregamento seletivo da ISO antes do Start também foi testado. Com 13,75 MiB dos blocos usados no Cruise carregados em memória, todas as 41 buscas do runtime na janela medida foram atendidas sem HTTP, mas o FPS exibido permaneceu em **3,30**, contra **3,27** sem pré-carga. A opção experimental `disc-preload=<manifesto.json>` pode ajudar o streaming em rede; o caminho gráfico do GS continua sendo o gargalo para atingir 30–60 FPS. Resultados e formato do manifesto: [desempenho](docs/PERFORMANCE.md).
-
-O transporte multiplayer inicial já cria salas e encaminha pacotes binários entre abas com um relay WebSocket independente. A [página de teste e o protocolo](docs/MULTIPLAYER_PLAN.md#camada-implementada-salas-e-relay) permitem validar essa camada sem alterar a sessão do jogo. Em um build diagnóstico separado, duas instâncias abriram os menus originais, descobriram a hospedagem e entraram no mesmo **LOBBY** automaticamente. Em 01/11/2026, ambas largaram na mesma **Ordered Race**, exibiram posições **1/2** e **2/2**, e avançaram na pista com o carro remoto visível. Ainda faltam validar a chegada e o resultado, corridas de carreira/Arcade, identidades no menu original e uma taxa de quadros jogável com dois clientes.
-
-A página do jogo agora permite escolher **Jogar solo** ou **Multiplayer** antes do Start. Multiplayer cria ou entra em uma sala, mostra os participantes e copia um convite. No build de diagnóstico, a sala já encaminha os quadros Ethernet ao SMAP emulado, e os jogadores usam os menus LAN originais para entrar no mesmo lobby. O [estado e limite dessa integração](docs/MULTIPLAYER_PLAN.md#seleção-solo--multiplayer-na-página-do-jogo) registra os modos e validações pendentes.
-
-O [mapeamento da interface original](docs/UI_ASSETS.md) encontrou os menus e fundos de rede dentro de `ASSETS.DAT`. Um teste isolado trocou um rótulo da tabela de textos e o jogo exibiu o novo texto no menu, preservando a arte original e a ISO. O menu **NETWORKING** está acessível com sondas opt-in no build diagnóstico; a entrada continua dependente dessas sondas e da implementação de rede emulada.
-
-Para reproduzir o build, use Linux ou WSL e uma cópia própria da ISO. Mantenha os dados do jogo e os arquivos gerados fora do repositório. A fonte versionada está em `engine/`; copie-a para um diretório de build separado. Consulte também as [dependências e instruções da base](engine/README.md).
+Prerequisites: Linux or WSL, Git, CMake, Ninja, a C++20 compiler, Python 3, sufficient disk space, and a current Chrome or Edge with WebGPU and the required WebAssembly features. The first web build installs or uses the Emscripten SDK. See the [engine instructions](engine/README.md) for the full toolchain requirements.
 
 ```bash
+git clone https://github.com/BrunoDanielPF/mc3remix-web.git
+cd mc3remix-web
 mkdir -p "$HOME/mc3remix-build"
 cp -a engine/. "$HOME/mc3remix-build/"
 cd "$HOME/mc3remix-build"
-scripts/port.sh mc3remix "/caminho/para/sua-copia/MC3-Remix.iso" --frames 4200 --rounds 4
+scripts/port.sh mc3remix "/absolute/path/to/your/MC3-Remix.iso" --frames 4200 --rounds 4
 python3 scripts/serve.py build/web-mc3remix games/mc3remix/disc.iso
 ```
 
-Abra a [prévia local com a introdução avançada](http://127.0.0.1:8620/?press=300:start,600:cross,900:cross,1200:cross,1500:cross) em um navegador com WebGPU e clique em **Start**. O servidor de teste escuta apenas em `127.0.0.1` porque entrega bytes da ISO local.
+Open `http://127.0.0.1:8620/` and click **Start**. The test server binds to loopback because its `/disc.iso` route exposes the selected disc to anyone who can reach it. To rebuild after editing `engine/`, copy the source into the separate build directory again and run `scripts/build_web.sh mc3remix` there.
 
-Para reconstruir após editar `engine/`, sincronize o código fonte com o checkout WSL e rode o build web:
+### Controls
+
+| Action | Keyboard | PS2 input |
+| --- | --- | --- |
+| Accelerate / confirm | `W` / `Z` | Cross |
+| Brake / reverse | `S` | Square |
+| Steer | `A` / `D` | Left stick |
+| Handbrake | `Space` or `Q` | R1 |
+| Nitro | `E` or `2` | R2 |
+| Change camera | `C` | Triangle |
+| Headlights / accept race | `X` | Circle |
+| Menu navigation | Arrow keys | D-pad |
+| Pause / start | `Enter` | Start |
+| Fullscreen | `F` | Browser control |
+
+`Shift` maps to L1, `R` or `1` to L2, `V` to L3, and `N` or `Backspace` to Select. `I`/`J`/`K`/`L` also move the left stick. During the opening, press `Z` to advance; at the memory card prompt you can choose **Continue Without Saving**. The web shell also supports a standard gamepad and on-screen touch controls.
+
+## Multiplayer development
+
+The relay is separate from the game server and can be tested locally:
 
 ```bash
-cp -a engine/. "$HOME/mc3remix-build/"
-cd "$HOME/mc3remix-build"
-scripts/build_web.sh mc3remix
+python3 -m pip install -r engine/scripts/requirements-relay.txt
+python3 engine/scripts/room_relay.py
+python3 -m unittest discover -s engine/tests -p test_room_relay.py -v
 ```
 
-Em uma instalação nova, `scripts/port.sh` gera o código do jogo e prepara os dois builds localmente. A ISO, o código gerado e os binários compilados não são distribuídos neste repositório.
+With the local game server running, open `http://127.0.0.1:8620/room-test.html` to test room transport. That page verifies packet relay, not a completed in-game race. The original LAN flow currently requires a diagnostic build and opt-in network probes; follow the exact conditions in the [multiplayer log](docs/MULTIPLAYER_PLAN.md). Multiplayer career events, the wider Arcade race catalogue, race completion, player identity inside the original menus, and cross-machine latency are still open work.
 
-Controles web para corrida: `W` acelera (X do PS2), `S` freia/dá ré (□), `A`/`D` esterçam pelo analógico esquerdo, `Espaço` ou `Q` acionam o freio de mão (R1), e `E` ou `2` acionam o nitro (R2). `Shift` é L1 (transferência de peso), `R` ou `1` é L2 (olhar para trás), `C` muda a câmera (△), `V` é L3 (manobra especial), `X` é ○ (faróis/aceitar corrida). `I`/`J`/`K`/`L` também controlam o analógico esquerdo. `N` ou `Backspace` é Select; `Enter` é Start/pausa. As setas são o direcional do PS2 para menus, mapa, modo de corrida e música; `Z` também é X do PS2 para confirmar. `F` alterna tela cheia. O mapeamento segue os controles padrão do [manual do Remix](https://www.videogamemanual.com/PS2/Midnight%20Club%203-%20DUB%20Edition%20Remix%20%28GH%29%20%28USA%29.pdf).
+For a relay on another machine, open the **local** game page with `?relay-url=wss%3A%2F%2FYOUR_HOST&mode=multi`. The relay accepts WSS endpoints, or plain WS only on loopback. The relay must allow the browser origin `http://127.0.0.1:8620`; room invitations retain the selected relay URL. See the [VPS deployment runbook](docs/VPS_DEPLOYMENT.md) for the relay-only architecture and release gates.
 
-Para avançar a abertura, pressione `Z` algumas vezes durante os logotipos. No aviso de cartão, use seta para baixo e `Z` em **Continue Without Saving**. No menu principal, selecione **Arcade**; as opções padrão levam ao modo Cruise. A abertura sem essas entradas pode permanecer visualmente no último quadro do vídeo; o runner nativo apresenta o mesmo comportamento.
+## Hosting boundary
+
+The current browser build expects the ISO at `/disc.iso` and contains WebAssembly translated from the proprietary game executable. **Do not publish the ISO, generated C++, or generated WebAssembly as part of this repository or a public VPS release.** A public playable release needs a client-side disc/build loading design and rights to distribute every hosted artifact. The relay can be hosted separately over HTTPS/WSS; it does not contain game assets and does not render the game. The [porting plan](docs/PORTING_PLAN.md) records the release requirements.
+
+## Repository layout
+
+- `engine/` — PS2 recompilation pipeline, runtime, browser shell, relay, and tests.
+- `docs/` — porting decisions, test evidence, performance measurements, and multiplayer work.
+- `main` — initial baseline; `develop` — ongoing integration branch.
+
+The engine carries an [MIT license](engine/LICENSE) and its own third-party notices. The root project has no separate license yet. *Midnight Club*, *PlayStation*, and related names and assets belong to their respective owners. This is an independent research project and is not affiliated with or endorsed by Rockstar Games, Sony, or the original developers.
