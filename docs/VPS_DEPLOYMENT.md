@@ -1,60 +1,52 @@
-# VPS deployment: public preview and multiplayer relay
+# VPS deployment: playable site and multiplayer relay
 
-The current public release contains a **project preview** in `site/` and the **room relay**. Each player builds and serves the game locally with their own disc; the VPS forwards WebSocket packets and never receives an ISO, save file, generated game code, or rendered frame. The existing game page and generated WebAssembly are **not a public site bundle**. Do not describe the preview as a public playable game release.
+The public site at [mc3-enhanced.brdanpe.tech](https://mc3-enhanced.brdanpe.tech/) has a single **Play** entry point, a keyboard map, and brief Solo/Multiplayer instructions. The game shell contains the room controls; the public release does not include the standalone room-test page. The browser executes the generated WebAssembly and renders locally. Nginx serves static files and disc sectors; a loopback WebSocket service relays room packets.
+
+The project owner supplied authorization to redistribute the game artifacts on this VPS. That authorization has not been independently verified and does not extend to third parties. Keep the ISO, generated code, WebAssembly, saves, and release archives out of Git.
 
 ## Live installation (1 November 2026)
 
-- Public preview: `https://mc3-enhanced.brdanpe.tech/`; room test: `/room.html`; relay: `wss://mc3-enhanced.brdanpe.tech/v1/rooms/<32-hex-code>`.
-- VPS: `179.199.141.253` (`srv1953421.hstgr.cloud`), SSH user `engenhalab-admin` on port 22. `PermitRootLogin no` remains in effect; the admin user already existed and has sudo access. The public key fingerprint is `SHA256:WoPkbkAjEZBgmyrXnhgERSI6unFQHqS91sYWBm2yeIE`. Do not put passwords or private keys in this repository.
-- Active release: `/var/www/mc3-enhanced/releases/20261101T231439Z`, selected by `/var/www/mc3-enhanced/current`. The relay runs as `mc3-enhanced-relay.service` with a dynamic unprivileged user on `127.0.0.1:8621`.
-- Nginx site: `/etc/nginx/sites-available/mc3-enhanced`, enabled by the matching symlink in `sites-enabled`. The repository templates are in `deploy/hostinger/`. Certbot issued a certificate under `/etc/letsencrypt/live/mc3-enhanced.brdanpe.tech/`; its renewal task is enabled.
-- The uploaded allowlisted archive had SHA-256 `a0caba24c5305ef9e805c516c8d4c2e545c12fdaacba39e1577bf93f10cf6a00`. The VPS needed `python3.14-venv`, `python3-pip-whl`, and `python3-setuptools-whl`; installing them upgraded no existing packages and restarted no services.
+- Domain: `mc3-enhanced.brdanpe.tech`; VPS: `179.199.141.253`; SSH user: `engenhalab-admin`, port 22, key-based access with passwordless sudo. Root SSH remains disabled.
+- Active release: `/var/www/mc3-enhanced/releases/20261101T234333Z`, selected by `/var/www/mc3-enhanced/current`. The previous playable releases `20261101T234136Z` and `20261101T233503Z`, and preview release `20261101T231439Z`, remain available for rollback.
+- Disc: `/var/lib/mc3-enhanced/disc.iso`, 8,539,963,392 bytes, SHA-256 `de199f7e7f57b7cb603a129217f7482d50644fd66558450dfeb5612857b732f9`. Nginx maps only `/disc.iso` to this path and supports HTTP Range.
+- Playable archive: `build/vps/mc3-enhanced-playable.tar.gz`, SHA-256 `50dda25edf55b2185527d6031c1b381954ebddcd7b510ee97e958d1128ffd789`; verified on the VPS before extraction. It contains the landing page, browser build, virtual LAN client, preconfigured virtual PS2 card, relay, and pinned requirements. The disc is transferred separately.
+- Nginx site: `/etc/nginx/sites-available/mc3-enhanced`, enabled by its matching symlink. TLS is managed by Certbot under `/etc/letsencrypt/live/mc3-enhanced.brdanpe.tech/`.
+- Relay: `mc3-enhanced-relay.service` runs unprivileged on `127.0.0.1:8621`. Nginx proxies `/v1/rooms/` to it over loopback. Do not expose port 8621 publicly.
 
-Release verification: five relay unit tests passed locally; the VPS archive hash matched; Nginx syntax passed; HTTPS returned 200 for the homepage, room page, CSS, JS, favicon, and `/healthz`; `/disc.iso` returned 404. Two WSS clients joined one public room and exchanged binary packets in both directions. An unrelated origin received HTTP 403. The room UI also created a room in a browser. This does **not** verify two separate player machines, an in-game race over the public relay, or client FPS. Keep those as release gates for the playable build.
+## What has been verified
 
-For the local game shell, set `relay-url=wss%3A%2F%2Fmc3-enhanced.brdanpe.tech` and `mode=multi` in its query string. The game shell still requires the opt-in virtual LAN probes described in [MULTIPLAYER_PLAN.md](MULTIPLAYER_PLAN.md).
+- Archive and ISO SHA-256 matched between local and VPS copies; `nginx -t` passed; the relay service started.
+- HTTPS returned 200 for the landing page, game shell, scripts, styles, card seed, and health endpoint. WebAssembly and game data use precompressed files. `/disc.iso` returned 206 for an HTTP Range request. `/room.html` returned 404.
+- Two independent WSS clients joined the public relay and exchanged a binary packet.
+- In a public browser tab, Solo mode started the game and visibly rendered the opening logo. Multiplayer room creation connected to the public relay and the game started with that room active. The landing page also rendered with its new CSS in a browser that had previously cached the preview; the CSS URL now has a release version.
 
-## Required deployment inputs
+These checks do not establish sustained campaign FPS, a complete public race between two separate machines, race results, long-session saves, or performance on low-power GPUs. The local two-instance Ordered Race evidence is documented in [MULTIPLAYER_PLAN.md](MULTIPLAYER_PLAN.md).
 
-- DNS name `mc3-enhanced.brdanpe.tech` and the VPS IP or SSH alias, user, port and authorized key.
-- A DNS record pointing that name at the verified VPS.
-- A dedicated service user, release directory and TLS certificate for this project. Inspect existing Nginx and systemd state before choosing names or paths; do not reuse another site's configuration.
-- Firewall access for HTTPS and an existing trusted SSH route. Keep the relay's TCP listener on `127.0.0.1`.
+## Prepare a new release
 
-The supplied general VPS guide defines the operational sequence: inspect, stage a hashed artifact, verify the hash on the server, activate a versioned release, test Nginx and public HTTPS/WSS, then retain a rollback target. The exact server details are deliberately absent from that guide and must be supplied for this site.
-
-Local preview validation on 1 November 2026: the homepage and room page rendered, two browser tabs joined the same relay room, both showed two pilots, and a binary test packet sent by the second tab arrived in the first. This validates the preview and local transport only; HTTPS, WSS through Nginx, and two separate computers remain untested.
-
-## Local preparation
-
-Run the relay tests and inspect the release content:
+Update `develop`, build the game in the separate Linux/WSL build checkout, and run the relay tests. The currently deployed variant includes the opt-in original NETWORKING menu and virtual LAN probes. A normal build without those patches will not provide the same in-game multiplayer path.
 
 ```bash
-python3 -m pip install -r engine/scripts/requirements-relay.txt
 python3 -m unittest discover -s engine/tests -p test_room_relay.py -v
-git diff --check
+python3 deploy/package_playable.py build/vps/mc3-enhanced-playable.tar.gz \
+  --build /absolute/path/to/build/web-mc3remix-menu-probe \
+  --card /absolute/path/to/card-valid-v8.ps2
+sha256sum build/vps/mc3-enhanced-playable.tar.gz
+tar -tzf build/vps/mc3-enhanced-playable.tar.gz
 ```
 
-Run `python3 deploy/package_preview.py build/vps/mc3-enhanced-preview.tar.gz` to produce an allowlisted archive of the static preview, browser room client, and relay server. Record the printed SHA-256 and inspect the archive members before upload. Reject any archive that contains `*.iso`, `*.ps2`, `*.wasm`, `*.data`, `games/`, `generated/`, `build/`, `.env`, or keys. The VPS should install the pinned dependency in a virtual environment inside the new release and run the service as a dedicated unprivileged user. Keep releases and service data separate.
+The packager has an explicit member list and rejects missing files, symlinks, and unexpectedly large members. Verify that no ISO, key, environment file, or generated C++ enters the archive. Transfer the ISO separately only when its hash or content changes.
 
-## Service and proxy
+Stage the archive in a new `/var/www/mc3-enhanced/releases/<UTC timestamp>` directory, verify its SHA-256 on the VPS, extract it, and create the relay virtual environment from the pinned requirements. Keep the shared disc and any persistent data outside release directories. Test the candidate on loopback before changing `current`.
 
-Start the relay on loopback. The local web build defaults to `http://127.0.0.1:8620`, which is the browser's Origin even when two players are on different computers:
+The Nginx template is [nginx-tls.conf](../deploy/hostinger/nginx-tls.conf). It provides HTTPS, cross-origin isolation, WebAssembly and audio-worklet CSP allowances, JavaScript MIME for `virtual-lan.mjs`, static gzip, Range access to the disc, and WSS proxying. Run `nginx -t` before every reload. Keep other sites' Nginx blocks and services untouched.
 
-```bash
-python3 relay/room_relay.py --host 127.0.0.1 --port 8621 --origin https://mc3-enhanced.brdanpe.tech --origin http://127.0.0.1:8620
-```
+## Activate, verify, and roll back
 
-If players deliberately use another local port or origin, add that exact origin with another `--origin` argument. Do not use a wildcard origin. A site hosted on HTTPS would need its own exact HTTPS origin. The relay has room and packet rate limits, but public abuse protection and operational monitoring still need review before broad exposure.
+Point `/var/www/mc3-enhanced/current` to the new release atomically, restart only `mc3-enhanced-relay.service`, and reload Nginx after a successful syntax check. Verify public HTTPS assets, Range responses, two WSS clients in one room, Solo boot, and Multiplayer room creation and boot in a real browser. For a full multiplayer release gate, test two separate client machines in the original LAN lobby and a complete race, including disconnect behavior, latency, and FPS.
 
-Configure a dedicated Nginx `server_name` for `mc3-enhanced.brdanpe.tech`. Serve `site/index.html`, `site/room.html`, `site/style.css`, `site/room.js`, and `site/room-client.js` from the active release. Terminate TLS there and proxy only `/v1/rooms/` to `http://127.0.0.1:8621`, preserving the WebSocket `Upgrade` and `Connection` headers and the request path. Run `nginx -t` before reload; never expose port 8621 publicly. Use the site's actual certificate and existing Nginx conventions rather than copying a certificate path from another project.
+To roll back, restore `current` to the previous release and restore its matching Nginx configuration, then run `nginx -t`, reload Nginx, restart the relay, and repeat public smoke checks. The previous preview configuration does not expose `/disc.iso`; the disc file can remain in `/var/lib/mc3-enhanced`. A code rollback does not alter browser-side virtual memory cards.
 
-## Client connection and verification
+## Player flow
 
-Each player runs the local game build at `http://127.0.0.1:8620/` and sets `relay-url=wss://COMPLETE_DOMAIN` in the query string. The web shell includes this URL in room invitations. Plain `ws://` is accepted only for loopback relay tests. The game page still needs the experimental network probes described in [MULTIPLAYER_PLAN.md](MULTIPLAYER_PLAN.md); a relay connection alone does not prove an in-game race.
-
-Before activation, verify the release hash on the VPS and test the new service on loopback. After activation, confirm the service is active, Nginx configuration is valid, both public pages and assets load over HTTPS with a trusted certificate, and two **separate client machines** can join the same room through WSS. Then test the original LAN lobby and a race while recording latency, disconnection behavior, and client FPS. Keep the previous release available; on failure, restore its symlink/service target and verify again. An HTTP 200 homepage is not a substitute for a WebSocket room test.
-
-## Public playable site gate
-
-The local shell currently reads `/disc.iso` by HTTP Range, and the generated WebAssembly includes translated proprietary game code. A public playable site requires an implemented and tested design for users to provide their own local disc and locally generated game build, plus the rights to distribute every hosted artifact. It also needs cross-origin isolation headers (`Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp`), complete multiplayer and save validation, and acceptable FPS on target client hardware. Until these gates pass, publish only the game-independent preview and relay components.
+Open the homepage and click **Play**. Select Solo, or select Multiplayer, enter a name, and create or join a room before starting. In the original menus, use **NETWORKING → LAN Play** to reach the in-game lobby. No account is required. Progress lives in a virtual PS2 card stored by the browser; players can export a backup from the game shell. Clearing site storage may erase locally stored progress.

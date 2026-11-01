@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Midnight Club 3 Remix — prévia web</title>
+<title>Midnight Club 3 Remix — jogar</title>
 <style>
   :root { color-scheme: dark; }
   html, body { margin: 0; height: 100%; background: #0b0b0d; color: #d8d8dc; font: 13px system-ui, sans-serif; }
@@ -144,7 +144,7 @@
   <button id="fullscreen" type="button" title="Fullscreen (F or double click)">Fullscreen</button></div>
 <button id="exit-fullscreen" type="button">Exit fullscreen</button>
 <div id="overlay"><div id="panel">
-  <p>Midnight Club 3 Remix — prévia local</p>
+  <p>Midnight Club 3: DUB Edition Remix</p>
   <p>W/S: acelerar/frear · A/D: esterçar · Espaço: freio de mão · E: nitro</p>
   <p>Setas: menus/direcional · Z: X do PS2 · X: círculo · Enter: pausa</p>
   <div id="mode-picker" role="group" aria-label="Modo de jogo">
@@ -276,7 +276,7 @@ function syncStartButton() {
   if (missing.length) return;
   startButton.disabled = !gameReady || (selectedMode === 'multi' && !roomClient?.slot);
   startButton.textContent = selectedMode === 'solo' ? (gameReady ? 'Jogar solo' : 'Loading…')
-    : roomClient?.slot ? 'Abrir jogo para testar LAN' : 'Conecte-se à sala';
+    : roomClient?.slot ? 'Jogar multiplayer' : 'Conecte-se à sala';
 }
 
 function selectMode(mode) {
@@ -914,8 +914,9 @@ var Module = {
           if (seed) {
             try {
               const url = new URL(seed, location.href);
-              if (!['127.0.0.1', 'localhost'].includes(location.hostname) || url.origin !== location.origin)
-                throw new Error('card seed is limited to the local test server');
+              const localHost = ['127.0.0.1', 'localhost'].includes(location.hostname);
+              if (url.origin !== location.origin || (!localHost && url.pathname !== '/card-valid-v8.ps2'))
+                throw new Error('card seed must be the trusted file on this server');
               let existing = false;
               try { FS.stat(CARD_FILE); existing = true; } catch (_) {}
               if (!existing) {
@@ -926,7 +927,7 @@ var Module = {
                     new TextDecoder().decode(bytes.subarray(0, 28)) !== 'Sony PS2 Memory Card Format ')
                   throw new Error('invalid PS2 memory card image');
                 FS.writeFile(CARD_FILE, bytes);
-                console.info('memory card: seeded local test card from ' + url.pathname);
+                console.info('memory card: initialized from ' + url.pathname);
               }
             } catch (error) {
               console.warn('memory card: could not seed local test card', error);

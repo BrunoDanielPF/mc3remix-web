@@ -2,9 +2,9 @@
 
 An experimental browser port of the **PlayStation 2 NTSC-U** release of *Midnight Club 3: DUB Edition Remix*. The game runs locally through static recompilation of its PS2 executable to C++ and WebAssembly, with a PS2 runtime and WebGPU renderer. This project builds on [ps2-web-recomp](https://github.com/snuri00/ps2-web-recomp); [nfsu2-web](https://github.com/th0mk/nfsu2-web) is an architectural reference.
 
-**Status:** A local build boots, reaches the original menus, and drives in San Diego Cruise. Two browser instances have started and driven in the same original LAN Ordered Race. This is a research prototype: multiplayer results, long sessions, sound and save persistence still need validation, and performance on integrated GPUs is below the playable target.
+**Status:** A local build boots, reaches the original menus, and drives in San Diego Cruise. Two browser instances have started and driven in the same original LAN Ordered Race. The public site now serves a playable browser build. This is still a research prototype: public cross-machine races, long sessions, sound and save persistence need further validation, and performance on integrated GPUs is below the playable target.
 
-**Public preview:** [mc3-enhanced.brdanpe.tech](https://mc3-enhanced.brdanpe.tech/) hosts the project status and a [multiplayer room test](https://mc3-enhanced.brdanpe.tech/room.html). The public site serves no disc image or generated game build. Players run the game locally with their own copy and can use `wss://mc3-enhanced.brdanpe.tech` as the relay endpoint. The room test confirms packet transport, not a complete in-game race across separate machines.
+**Play online:** [mc3-enhanced.brdanpe.tech](https://mc3-enhanced.brdanpe.tech/) provides one **Play** entry point, keyboard controls, and short instructions. Choose Solo or Multiplayer inside the game shell. The site serves the disc image and generated WebAssembly, while the relay forwards room traffic over WSS. No separate public room-test page is deployed. The user supplied authorization to distribute the hosted game artifacts; those artifacts are not committed to this repository.
 
 ![Two-player Ordered Race in the browser](docs/evidence/web-ordered-race-guest-track.png)
 
@@ -15,6 +15,7 @@ An experimental browser port of the **PlayStation 2 NTSC-U** release of *Midnigh
 - **Controls and saves:** keyboard, gamepad, and touch input; aspect ratio, resolution and fullscreen controls; a browser-backed virtual PS2 memory card with import and export controls. Long-session save and restore still need end-to-end validation.
 - **Multiplayer prototype:** the web shell offers Solo and Multiplayer, a player name without an account, room creation and invitations. A WebSocket relay forwards binary packets, while an opt-in virtual LAN bridge connects them to the emulated PS2 network adapter. Two instances discovered each other through the game's original **NETWORKING → Host Game / Join Game** flow, entered the original lobby, and started **Ordered Race — Rites of Passage**. Both displayed positions **1/2** and **2/2**, moved independently, and rendered the remote car. Finishing the race and final results have not been verified.
 - **Performance diagnostics:** reproducible save states, frame-window benchmarks, GPU/CPU counters, disc-read counters, visual captures, and opt-in renderer experiments. Selective disc preloading eliminated network reads in one Cruise test window but did not materially improve FPS; the graphics path remains the main optimization target.
+- **Public browser delivery:** versioned static release behind Nginx/TLS, HTTP Range access to the disc, precompressed WebAssembly and data, and the WebSocket relay. A public browser smoke test reached the game boot sequence in Solo mode and started the game with a connected multiplayer room; a complete public two-player race has not yet been verified.
 
 The [porting plan](docs/PORTING_PLAN.md), [multiplayer log](docs/MULTIPLAYER_PLAN.md), [performance report](docs/PERFORMANCE.md), [performance checkpoint](docs/PERFORMANCE_CHECKPOINT.md), and [UI asset map](docs/UI_ASSETS.md) contain the test conditions and remaining work.
 
@@ -30,7 +31,7 @@ The target is approximately **60 displayed FPS**, with **30 FPS** as the minimum
 
 ## Build and run locally
 
-Use your own PS2 Remix disc image. The tested image has volume label `MC3REMIX`, boot executable `SLUS_213.55`, and size **8,539,963,392 bytes**. The ISO, translated game code, generated WebAssembly, saves, and build outputs are intentionally excluded from this repository.
+For a local build, use your own PS2 Remix disc image. The tested image has volume label `MC3REMIX`, boot executable `SLUS_213.55`, and size **8,539,963,392 bytes**. The ISO, translated game code, generated WebAssembly, saves, and build outputs are intentionally excluded from this repository. The public site's separately hosted artifacts are described in the [VPS deployment runbook](docs/VPS_DEPLOYMENT.md).
 
 Prerequisites: Linux or WSL, Git, CMake, Ninja, a C++20 compiler, Python 3, sufficient disk space, and a current Chrome or Edge with WebGPU and the required WebAssembly features. The first web build installs or uses the Emscripten SDK. See the [engine instructions](engine/README.md) for the full toolchain requirements.
 
@@ -50,7 +51,8 @@ Open `http://127.0.0.1:8620/` and click **Start**. The test server binds to loop
 
 | Action | Keyboard | PS2 input |
 | --- | --- | --- |
-| Accelerate / confirm | `W` / `Z` | Cross |
+| Accelerate | `W` | Left stick up |
+| Confirm in menus | `Z` | Cross |
 | Brake / reverse | `S` | Square |
 | Steer | `A` / `D` | Left stick |
 | Handbrake | `Space` or `Q` | R1 |
@@ -75,17 +77,17 @@ python3 -m unittest discover -s engine/tests -p test_room_relay.py -v
 
 With the local game server running, open `http://127.0.0.1:8620/room-test.html` to test room transport. That page verifies packet relay, not a completed in-game race. The original LAN flow currently requires a diagnostic build and opt-in network probes; follow the exact conditions in the [multiplayer log](docs/MULTIPLAYER_PLAN.md). Multiplayer career events, the wider Arcade race catalogue, race completion, player identity inside the original menus, and cross-machine latency are still open work.
 
-For a relay on another machine, open the **local** game page with `?relay-url=wss%3A%2F%2FYOUR_HOST&mode=multi`. The relay accepts WSS endpoints, or plain WS only on loopback. The relay must allow the browser origin `http://127.0.0.1:8620`; room invitations retain the selected relay URL. See the [VPS deployment runbook](docs/VPS_DEPLOYMENT.md) for the relay-only architecture and release gates.
+For the public build, click **Play**, select **Multiplayer**, enter a player name, then create or join a room. After starting the game, use the original **NETWORKING → LAN Play** menu. A room connection validates the relay path; the public original LAN lobby and a complete race across separate machines remain release tests. Local builds can still point `relay-url` at `wss://mc3-enhanced.brdanpe.tech`.
 
 ## Hosting boundary
 
-The current browser build expects the ISO at `/disc.iso` and contains WebAssembly translated from the proprietary game executable. **Do not publish the ISO, generated C++, or generated WebAssembly as part of this repository or a public VPS release.** A public playable release needs a client-side disc/build loading design and rights to distribute every hosted artifact. The public preview in `site/` and the relay contain no game assets; the relay forwards packets over HTTPS/WSS and does not render the game. The [VPS runbook](docs/VPS_DEPLOYMENT.md) and [porting plan](docs/PORTING_PLAN.md) record the release requirements.
+The hosted build expects `/disc.iso` and contains WebAssembly translated from the game executable. The user supplied authorization to distribute these artifacts on the public VPS. They are transferred outside Git: the disc lives at a separate VPS data path, and generated browser files go into an allowlisted release archive. This repository does not grant rights to redistribute the game or its assets elsewhere. Each player's browser renders the game; the VPS serves files and relays packets. See the [VPS runbook](docs/VPS_DEPLOYMENT.md) for packaging, verification, and rollback.
 
 ## Repository layout
 
 - `engine/` — PS2 recompilation pipeline, runtime, browser shell, relay, and tests.
-- `site/` — public project preview and browser-based room transport test, with no game build.
-- `deploy/` — allowlisted packaging for the preview and relay.
+- `site/` — public Play landing page and developer-only room transport test source.
+- `deploy/` — allowlisted playable release packaging, Nginx templates, and the older preview packager.
 - `docs/` — porting decisions, test evidence, performance measurements, and multiplayer work.
 - `main` — initial baseline; `develop` — ongoing integration branch.
 
