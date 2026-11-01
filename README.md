@@ -77,11 +77,13 @@ For a relay on another machine, open the **local** game page with `?relay-url=ws
 
 ## Hosting boundary
 
-The current browser build expects the ISO at `/disc.iso` and contains WebAssembly translated from the proprietary game executable. **Do not publish the ISO, generated C++, or generated WebAssembly as part of this repository or a public VPS release.** A public playable release needs a client-side disc/build loading design and rights to distribute every hosted artifact. The relay can be hosted separately over HTTPS/WSS; it does not contain game assets and does not render the game. The [porting plan](docs/PORTING_PLAN.md) records the release requirements.
+The current browser build expects the ISO at `/disc.iso` and contains WebAssembly translated from the proprietary game executable. **Do not publish the ISO, generated C++, or generated WebAssembly as part of this repository or a public VPS release.** A public playable release needs a client-side disc/build loading design and rights to distribute every hosted artifact. The public preview in `site/` and the relay contain no game assets; the relay forwards packets over HTTPS/WSS and does not render the game. The [VPS runbook](docs/VPS_DEPLOYMENT.md) and [porting plan](docs/PORTING_PLAN.md) record the release requirements.
 
 ## Repository layout
 
 - `engine/` — PS2 recompilation pipeline, runtime, browser shell, relay, and tests.
+- `site/` — public project preview and browser-based room transport test, with no game build.
+- `deploy/` — allowlisted packaging for the preview and relay.
 - `docs/` — porting decisions, test evidence, performance measurements, and multiplayer work.
 - `main` — initial baseline; `develop` — ongoing integration branch.
 

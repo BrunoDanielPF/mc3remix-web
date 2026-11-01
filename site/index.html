@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b111b">
+  <meta name="description" content="Prévia técnica do porte web de Midnight Club 3 Remix e teste do relay multiplayer.">
+  <title>MC3 Enhanced — prévia técnica</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"></div>
+  <header class="topbar wrap">
+    <a class="brand" href="/" aria-label="MC3 Enhanced, início"><span class="brand-mark">M<span>3</span></span><span>MC3 <strong>ENHANCED</strong></span></a>
+    <nav aria-label="Navegação principal"><a href="#estado">Estado</a><a href="#como-jogar">Como testar</a><a href="/room.html">Salas</a><a href="https://github.com/BrunoDanielPF/mc3remix-web/tree/develop" target="_blank" rel="noopener noreferrer">Código ↗</a></nav>
+  </header>
+
+  <main>
+    <section class="hero wrap" aria-labelledby="title">
+      <div class="eyebrow"><span class="pulse"></span> PROTÓTIPO EXPERIMENTAL · PS2 PARA WEB</div>
+      <h1 id="title">A cidade está<br><em>quase online.</em></h1>
+      <p class="lead">Midnight Club 3: DUB Edition Remix já roda localmente no navegador por recompilação estática. Este site apresenta o progresso do projeto e disponibiliza o teste das salas multiplayer.</p>
+      <div class="actions"><a class="button primary" href="/room.html">Testar salas <span aria-hidden="true">→</span></a><a class="button secondary" href="#como-jogar">Executar no meu computador</a></div>
+      <p class="hero-note">O jogo ainda não é servido por este site. Cada jogador usa sua própria cópia e build local.</p>
+      <div class="road" aria-hidden="true"><span class="road-line"></span><span class="road-line"></span></div>
+    </section>
+
+    <section class="metrics wrap" id="estado" aria-label="Estado do projeto">
+      <div class="metric"><span class="metric-value">57,22<span> FPS</span></span><p>Cruise no Edge/NVIDIA, janela de 120 quadros</p></div>
+      <div class="metric"><span class="metric-value">2<span> pilotos</span></span><p>Largada e movimento confirmados na mesma corrida LAN</p></div>
+      <div class="metric"><span class="metric-value">30<span> FPS</span></span><p>Meta mínima; GPU integrada ainda está abaixo dela</p></div>
+    </section>
+
+    <section class="section wrap" aria-labelledby="milestones-title">
+      <div class="section-heading"><span class="kicker">CHECKPOINT</span><h2 id="milestones-title">O que já foi validado</h2><p>Resultados de testes locais, com limites explícitos.</p></div>
+      <div class="cards">
+        <article class="card"><span class="card-num">01 / SOLO</span><h3>San Diego no navegador</h3><p>Abertura, menus, Arcade e direção no Cruise funcionam em um build local com WebGPU. O jogo lê somente os trechos necessários da ISO.</p><span class="tag done">Validado localmente</span></article>
+        <article class="card"><span class="card-num">02 / LAN</span><h3>Dois carros na pista</h3><p>Duas instâncias entraram no lobby original e começaram a Ordered Race “Rites of Passage”, com posições 1/2 e 2/2 e o carro remoto visível.</p><span class="tag done">Largada validada</span></article>
+        <article class="card"><span class="card-num">03 / PRÓXIMO</span><h3>Corrida completa e FPS</h3><p>A chegada, o resultado final e o desempenho em GPUs integradas ainda precisam de testes e otimizações. O relay não renderiza o jogo pelo piloto.</p><span class="tag pending">Em desenvolvimento</span></article>
+      </div>
+    </section>
+
+    <section class="section setup" id="como-jogar" aria-labelledby="setup-title"><div class="wrap setup-grid">
+      <div><span class="kicker">TESTE LOCAL</span><h2 id="setup-title">Seu jogo fica com você.</h2><p>O código gerado e a imagem do jogo permanecem no computador do jogador. O VPS hospeda esta página e encaminha os pacotes das salas; ele não recebe ISO, saves nem executáveis traduzidos.</p><a class="text-link" href="https://github.com/BrunoDanielPF/mc3remix-web/blob/develop/README.md#build-and-run-locally" target="_blank" rel="noopener noreferrer">Ler instruções de build local ↗</a></div>
+      <ol class="steps"><li><span>01</span><p>Prepare um build local com sua própria imagem PS2 Remix.</p></li><li><span>02</span><p>Abra o jogo em <code>127.0.0.1:8620</code> e configure o relay WSS deste domínio.</p></li><li><span>03</span><p>Crie uma sala, compartilhe o convite e teste a conexão com outro piloto.</p></li></ol>
+    </div></section>
+
+    <section class="section wrap final-cta" aria-labelledby="room-title"><span class="kicker">REDE</span><h2 id="room-title">Teste o transporte da sala</h2><p>A página de teste verifica conexão e pacotes entre navegadores. Ela não inicia uma corrida do MC3.</p><a class="button primary" href="/room.html">Abrir teste de salas <span aria-hidden="true">→</span></a></section>
+  </main>
+  <footer class="wrap"><span>MC3 Enhanced · prévia experimental</span><span>Projeto independente, sem vínculo com Rockstar Games ou Sony.</span></footer>
+</body>
+</html>
