@@ -328,8 +328,15 @@ async function joinRoom(create) {
     if (attempt !== roomAttempt || selectedMode !== 'multi') return;
     const testPort = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
       && /^\d{2,5}$/.test(params.get('relay-port') || '') ? params.get('relay-port') : '8621';
-    const relay = location.protocol === 'https:' ? `wss://${location.host}` : `ws://${location.hostname}:${testPort}`;
-    const client = new RoomClient(relay, code, playerName);
+    const configuredRelay = params.get('relay-url');
+    const relay = configuredRelay ? new URL(configuredRelay) : new URL(
+      location.protocol === 'https:' ? `wss://${location.host}` : `ws://${location.hostname}:${testPort}`);
+    const loopbackRelay = /^(localhost|127\.0\.0\.1)$/.test(relay.hostname);
+    if (relay.protocol !== 'wss:' && !(relay.protocol === 'ws:' && loopbackRelay))
+      throw new Error('The relay must use WSS, except on localhost');
+    if (relay.username || relay.password || relay.search || relay.hash || relay.pathname !== '/')
+      throw new Error('The relay URL must contain only its origin');
+    const client = new RoomClient(relay.origin, code, playerName);
     roomClient = client;
     const update = () => {
       if (roomClient !== client) return;
@@ -382,6 +389,7 @@ async function copyRoomInvite() {
   const invite = new URL(location.pathname, location.origin);
   invite.searchParams.set('mode', 'multi');
   invite.searchParams.set('room', roomCodeInput.value);
+  if (params.has('relay-url')) invite.searchParams.set('relay-url', params.get('relay-url'));
   try {
     await navigator.clipboard.writeText(invite.href);
     roomStatus.textContent = 'Convite copiado. Abra-o em outro navegador e clique Entrar na sala.';
