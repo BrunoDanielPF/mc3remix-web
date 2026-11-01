@@ -4,6 +4,8 @@ An experimental browser port of the **PlayStation 2 NTSC-U** release of *Midnigh
 
 **Status:** A local build boots, reaches the original menus, and drives in San Diego Cruise. Two browser instances have started and driven in the same original LAN Ordered Race. This is a research prototype: multiplayer results, long sessions, sound and save persistence still need validation, and performance on integrated GPUs is below the playable target.
 
+**Public preview:** [mc3-enhanced.brdanpe.tech](https://mc3-enhanced.brdanpe.tech/) hosts the project status and a [multiplayer room test](https://mc3-enhanced.brdanpe.tech/room.html). The public site serves no disc image or generated game build. Players run the game locally with their own copy and can use `wss://mc3-enhanced.brdanpe.tech` as the relay endpoint. The room test confirms packet transport, not a complete in-game race across separate machines.
+
 ![Two-player Ordered Race in the browser](docs/evidence/web-ordered-race-guest-track.png)
 
 ## What works today

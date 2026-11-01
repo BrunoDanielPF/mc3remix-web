@@ -1,0 +1,22 @@
+[Unit]
+Description=MC3 Enhanced multiplayer room relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+WorkingDirectory=/var/www/mc3-enhanced/current
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/var/www/mc3-enhanced/current/venv/bin/python relay/room_relay.py --host 127.0.0.1 --port 8621 --origin https://mc3-enhanced.brdanpe.tech --origin http://127.0.0.1:8620
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

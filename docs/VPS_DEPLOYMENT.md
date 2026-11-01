@@ -2,6 +2,18 @@
 
 The current public release contains a **project preview** in `site/` and the **room relay**. Each player builds and serves the game locally with their own disc; the VPS forwards WebSocket packets and never receives an ISO, save file, generated game code, or rendered frame. The existing game page and generated WebAssembly are **not a public site bundle**. Do not describe the preview as a public playable game release.
 
+## Live installation (1 November 2026)
+
+- Public preview: `https://mc3-enhanced.brdanpe.tech/`; room test: `/room.html`; relay: `wss://mc3-enhanced.brdanpe.tech/v1/rooms/<32-hex-code>`.
+- VPS: `179.199.141.253` (`srv1953421.hstgr.cloud`), SSH user `engenhalab-admin` on port 22. `PermitRootLogin no` remains in effect; the admin user already existed and has sudo access. The public key fingerprint is `SHA256:WoPkbkAjEZBgmyrXnhgERSI6unFQHqS91sYWBm2yeIE`. Do not put passwords or private keys in this repository.
+- Active release: `/var/www/mc3-enhanced/releases/20261101T231439Z`, selected by `/var/www/mc3-enhanced/current`. The relay runs as `mc3-enhanced-relay.service` with a dynamic unprivileged user on `127.0.0.1:8621`.
+- Nginx site: `/etc/nginx/sites-available/mc3-enhanced`, enabled by the matching symlink in `sites-enabled`. The repository templates are in `deploy/hostinger/`. Certbot issued a certificate under `/etc/letsencrypt/live/mc3-enhanced.brdanpe.tech/`; its renewal task is enabled.
+- The uploaded allowlisted archive had SHA-256 `a0caba24c5305ef9e805c516c8d4c2e545c12fdaacba39e1577bf93f10cf6a00`. The VPS needed `python3.14-venv`, `python3-pip-whl`, and `python3-setuptools-whl`; installing them upgraded no existing packages and restarted no services.
+
+Release verification: five relay unit tests passed locally; the VPS archive hash matched; Nginx syntax passed; HTTPS returned 200 for the homepage, room page, CSS, JS, favicon, and `/healthz`; `/disc.iso` returned 404. Two WSS clients joined one public room and exchanged binary packets in both directions. An unrelated origin received HTTP 403. The room UI also created a room in a browser. This does **not** verify two separate player machines, an in-game race over the public relay, or client FPS. Keep those as release gates for the playable build.
+
+For the local game shell, set `relay-url=wss%3A%2F%2Fmc3-enhanced.brdanpe.tech` and `mode=multi` in its query string. The game shell still requires the opt-in virtual LAN probes described in [MULTIPLAYER_PLAN.md](MULTIPLAYER_PLAN.md).
+
 ## Required deployment inputs
 
 - DNS name `mc3-enhanced.brdanpe.tech` and the VPS IP or SSH alias, user, port and authorized key.
