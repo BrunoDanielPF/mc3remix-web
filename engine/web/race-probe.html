@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<title>MC3 LAN race probe</title>
+<style>
+  body { margin: 0; background: #171717; color: #eee; font: 14px system-ui; }
+  header { padding: 8px 12px; }
+  button { margin-left: 8px; }
+  iframe { display: block; width: 100%; height: calc(100vh - 64px); border: 0; }
+</style>
+<header><strong id="role"></strong> · <span id="status">Preparando…</span>
+  <button data-pad="x">X PS2</button><button data-pad="start">Start PS2</button>
+</header>
+<iframe title="Midnight Club 3 Remix"></iframe>
+<script>
+'use strict';
+const query = new URLSearchParams(location.search);
+const role = query.get('role');
+const room = query.get('room');
+if (!['host', 'guest'].includes(role) || !/^[0-9a-f]{32}$/.test(room || ''))
+  throw new Error('Expected role=host|guest and a 32-digit hex room');
+document.getElementById('role').textContent = role === 'host' ? 'Anfitrião' : 'Convidado';
+const status = document.getElementById('status');
+const iframe = document.querySelector('iframe');
+const game = new URL('/ps2web.html', location.href);
+for (const [key, value] of Object.entries({
+  mode: 'multi', room, 'relay-port': query.get('relay-port') || '8645',
+  state: 'hardware-network-3650.state', 'card-seed': 'card-valid-v8.ps2',
+  PS2_NETWORK_MENU_PROBE: '1', PS2_VIRTUAL_LAN_PROBE: '1',
+  PS2_MC_FS_PROBE: '1', PS2_INPUT_PROBE: '1',
+  press: role === 'host'
+    ? '3700:down,3750:cross,4240:cross,4300:down,4350:right,4450:cross,4750:cross,4950:cross,7300:start'
+    : '3700:down,3750:cross,4240:down,4300:cross,6100:cross',
+})) game.searchParams.set(key, value);
+iframe.src = game.href;
+let connected = false;
+let running = false;
+let lastCaptureFrame = -1;
+document.querySelectorAll('[data-pad]').forEach((button) => button.addEventListener('click', () => {
+  const label = button.dataset.pad === 'x' ? 'X PS2' : 'Start PS2';
+  [...(iframe.contentDocument?.querySelectorAll('#input-probe button') || [])]
+    .find((child) => child.textContent.trim() === label)?.click();
+}));
+async function tick() {
+  const doc = iframe.contentDocument;
+  if (!doc) return;
+  try {
+    if (!connected && doc.getElementById('room-join')) {
+      const name = doc.getElementById('player-name');
+      if (name) name.value = role === 'host' ? 'Corredor 1' : 'Corredor 2';
+      doc.getElementById('room-join').click();
+      connected = true;
+      status.textContent = 'Conectando à sala…';
+    }
+    const start = doc.getElementById('start');
+    if (connected && !running && start && !start.disabled) {
+      start.click();
+      running = true;
+    }
+    const module = iframe.contentWindow.Module;
+    const frame = module?.running ? Math.trunc(module._ps2web_frames()) : 0;
+    const roomText = doc.getElementById('mode-status')?.textContent || '';
+    const gameText = doc.getElementById('status')?.textContent || '';
+    status.textContent = `${frame} quadros · ${roomText} · ${gameText}`;
+    if (!frame || frame < lastCaptureFrame + 180) return;
+    lastCaptureFrame = frame;
+    const detail = JSON.stringify({role, room, frame, roomText, gameText,
+      metrics: doc.getElementById('stats')?.textContent || '', time: new Date().toISOString()});
+    await fetch(`/race-capture/${role}/${frame}.json`, {method: 'POST', body: detail});
+    const canvas = doc.querySelector('canvas');
+    if (!canvas) return;
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (blob) await fetch(`/race-capture/${role}/${frame}.png`, {method: 'POST', body: blob});
+  } catch (error) {
+    status.textContent = String(error);
+  }
+}
+setInterval(tick, 1000);
+</script>
+</html>

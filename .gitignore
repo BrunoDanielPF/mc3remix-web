@@ -1,0 +1,32 @@
+# Dados proprietários fornecidos pelo usuário e imagens de disco.
+/game/
+/game-*/
+/games/
+/source/
+*.iso
+*.chd
+*.cso
+*.xiso
+*.xbe
+*.ps2
+*.state
+
+# Código derivado do jogo, compilados e caches.
+/work/
+/work-*/
+/gen/
+/generated/
+/build/
+/build-*/
+/out/
+/tools/emsdk/
+/third_party/
+/node_modules/
+/.local/
+/.cache/
+*.wasm
+
+# Configuração local.
+.env
+.env.*
+!.env.example

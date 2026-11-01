@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MC3 — teste do transporte LAN</title>
+<style>
+  body { font: 16px system-ui; background: #111827; color: #f9fafb; max-width: 720px; margin: 3rem auto; padding: 0 1rem }
+  input, button { font: inherit; padding: .55rem; margin: .3rem 0; border-radius: .35rem }
+  input { width: min(100%, 34rem); box-sizing: border-box }
+  button { cursor: pointer }
+  pre { white-space: pre-wrap; background: #1f2937; padding: 1rem; min-height: 10rem }
+  p { line-height: 1.45 }
+</style>
+<h1>Teste do transporte LAN</h1>
+<p>Esta página testa salas e pacotes binários entre abas. A integração com o menu LAN do jogo ainda depende da interface de rede do PS2.</p>
+<label>Servidor WebSocket<br><input id="server"></label><br>
+<label>Código da sala<br><input id="room" maxlength="32" spellcheck="false"></label><br>
+<button id="create">Criar sala</button> <button id="join">Entrar na sala</button>
+<p id="status">Desconectado</p>
+<button id="send" disabled>Enviar pacote de teste</button>
+<pre id="log"></pre>
+<script type="module">
+  import { RoomClient, newRoomCode } from './room-client.js';
+  const $ = id => document.getElementById(id);
+  $('server').value = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:8621`;
+  $('room').value = new URLSearchParams(location.search).get('room') || '';
+  let client;
+  const log = line => { $('log').textContent += `${line}\n`; };
+  async function join() {
+    client?.close();
+    $('send').disabled = true;
+    try {
+      client = new RoomClient($('server').value.trim(), $('room').value.trim());
+      client.addEventListener('room', event => {
+        log(JSON.stringify(event.detail));
+        $('status').textContent = `Conectado: slot ${client.slot}, outros ${[...client.peers].join(', ') || 'nenhum'}`;
+      });
+      client.addEventListener('packet', event => log(`pacote recebido: ${new TextDecoder().decode(event.detail)}`));
+      client.addEventListener('close', () => { $('status').textContent = 'Desconectado'; $('send').disabled = true; });
+      await client.ready;
+      $('send').disabled = false;
+      history.replaceState(null, '', `?room=${$('room').value}`);
+    } catch (error) { log(error.message); }
+  }
+  $('create').onclick = () => { $('room').value = newRoomCode(); join(); };
+  $('join').onclick = join;
+  $('send').onclick = () => client.send(new TextEncoder().encode(`MC3 relay test from slot ${client.slot} at ${Date.now()}`));
+</script>
+</html>
