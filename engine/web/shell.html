@@ -30,6 +30,7 @@
   #room-status { min-height: 1.3em; margin: 10px 0 0; line-height: 1.4; }
   #room-warning { margin: 10px 0 0; color: #e8c37a; line-height: 1.4; }
   #mode-status { color: #b4cff3; white-space: nowrap; }
+  #download-diagnostic { background: #72432f; white-space: nowrap; }
   #help { margin: 0; line-height: 1.5; color: #e8c37a; }
   .controls { display: none; }
   body.touch { overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none; }
@@ -119,7 +120,7 @@
     </div>
   </div>
 </div>
-<div id="bar"><span id="status">Loading…</span><span id="mode-status">Sem sala</span><button id="room-invite" type="button" hidden>Convidar</button><span id="stats"></span>
+<div id="bar"><span id="status">Loading…</span><span id="mode-status">Sem sala</span><button id="room-invite" type="button" hidden>Convidar</button><span id="stats"></span><button id="download-diagnostic" type="button" hidden>Baixar diagnóstico</button>
   <span id="input-probe" hidden aria-label="Controles de diagnóstico">
     <button type="button" data-pad-bit="14" data-pad-frames="2">X PS2</button>
     <button type="button" data-pad-bit="6" data-pad-frames="2">Baixo</button>
@@ -249,6 +250,52 @@ importInput.addEventListener('change', async () => {
 const statsEl = document.getElementById('stats');
 const canvas = document.getElementById('canvas');
 const params = new URLSearchParams(location.search);
+const diagnosticEnabled = params.get('diagnostic') === '1';
+const diagnosticButton = document.getElementById('download-diagnostic');
+const diagnosticKey = 'mc3-diagnostic-log-v1';
+let diagnosticLines = [];
+let diagnosticSaveTimer = 0;
+if (diagnosticEnabled) {
+  diagnosticButton.hidden = false;
+  try {
+    const previous = JSON.parse(sessionStorage.getItem(diagnosticKey) || '[]');
+    if (Array.isArray(previous)) diagnosticLines = previous.filter((line) => typeof line === 'string').slice(-1500);
+  } catch (_) {}
+}
+function saveDiagnostic() {
+  clearTimeout(diagnosticSaveTimer);
+  diagnosticSaveTimer = 0;
+  try { sessionStorage.setItem(diagnosticKey, JSON.stringify(diagnosticLines)); } catch (_) {}
+}
+function recordDiagnostic(kind, message) {
+  if (!diagnosticEnabled) return;
+  const frame = typeof Module !== 'undefined' && Module._ps2web_frames && Module.running
+    ? Module._ps2web_frames() : '?';
+  const line = `${new Date().toISOString()} frame=${frame} ${kind} ${String(message).slice(0, 700)}`;
+  diagnosticLines.push(line);
+  if (diagnosticLines.length > 1500) diagnosticLines.splice(0, diagnosticLines.length - 1500);
+  if (!diagnosticSaveTimer) diagnosticSaveTimer = setTimeout(saveDiagnostic, 3000);
+}
+if (diagnosticEnabled) {
+  recordDiagnostic('page', 'diagnostic mode started');
+  window.addEventListener('error', (event) => recordDiagnostic('js-error', `${event.message} at ${event.filename}:${event.lineno}`));
+  window.addEventListener('unhandledrejection', (event) => recordDiagnostic('js-rejection', event.reason));
+  setInterval(() => {
+    if (Module?.running) recordDiagnostic('heartbeat', document.getElementById('stats').textContent);
+  }, 5000);
+  diagnosticButton.addEventListener('click', () => {
+    recordDiagnostic('page', 'diagnostic downloaded');
+    saveDiagnostic();
+    const header = ['MC3 Remix browser diagnostic', `GPU: ${Module.gpuInfo || 'unknown'}`,
+      `Browser: ${navigator.userAgent}`, `Status: ${statusEl.textContent}`, ''];
+    const blob = new Blob([header.concat(diagnosticLines).join('\n') + '\n'], {type: 'text/plain;charset=utf-8'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `mc3-diagnostic-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+  });
+}
 const frameLimit = /^\d+$/.test(params.get('frames') || '') ? params.get('frames') : null;
 const roomSetup = document.getElementById('room-setup');
 const roomPanel = document.getElementById('room-panel');
@@ -858,6 +905,11 @@ var Module = {
   noCard: params.has('nocard'),
   presentCopy: params.has('copy'),
   onHalt: (reason) => {
+    recordDiagnostic('halt', reason);
+    if (diagnosticEnabled) {
+      saveDiagnostic();
+      diagnosticButton.textContent = 'Baixar diagnóstico do travamento';
+    }
     clearTimeout(noteTimer);
     noteTimer = 0;
     statusEl.textContent = 'Halted: ' + reason;
@@ -877,6 +929,10 @@ var Module = {
     if (params.has('nocard')) next.searchParams.set('nocard', '1');
     if (params.has('PS2_NETWORK_MENU_PROBE'))
       next.searchParams.set('PS2_NETWORK_MENU_PROBE', params.get('PS2_NETWORK_MENU_PROBE'));
+    if (diagnosticEnabled) {
+      next.searchParams.set('diagnostic', '1');
+      next.searchParams.set('PS2_MC3_TRANSITION_TRACE', '1');
+    }
     next.searchParams.append('arg', request.path);
     for (const arg of request.args) next.searchParams.append('arg', arg);
     const navigate = () => location.assign(next.href);
@@ -886,8 +942,8 @@ var Module = {
       else navigate();
     });
   },
-  print: (text) => console.log(text),
-  printErr: (text) => console.log(text),
+  print: (text) => { recordDiagnostic('stdout', text); console.log(text); },
+  printErr: (text) => { recordDiagnostic('stderr', text); console.log(text); },
   setStatus: (text) => {
     if (!text || Module.gpuInfo) return;
     const progress = text.match(/^Downloading data\.\.\. \((\d+)\/\d+\)/);

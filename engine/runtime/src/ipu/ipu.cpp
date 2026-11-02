@@ -552,7 +552,9 @@ void step() {
             g_starved = !run_command();
             if (!g_starved) g_decoding = false;
         } catch (const BadCode &) {
-            std::fprintf(stderr, "[ipu] bad code in command 0x%08X\n", g_command);
+            std::fprintf(stderr,
+                         "[ipu] bad code in command 0x%08X bit %zu in %zu bytes next %08X ctrl %08X phase %d result %08X\n",
+                         g_command, g_bit, g_in.size(), bits_at(g_bit, 32), g_ctrl, g_phase, g_result);
             g_ctrl |= kEcd;
             g_decoding = false;
             g_busy = false;

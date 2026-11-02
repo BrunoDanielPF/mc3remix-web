@@ -23,6 +23,8 @@ h1 em { color: var(--orange); font-style: normal; }
 .play { display: inline-flex; align-items: center; justify-content: space-between; gap: 42px; min-width: 250px; padding: 18px 22px; margin-top: 14px; background: var(--orange); color: #171b21; border-radius: 7px; font-weight: 900; box-shadow: 0 18px 55px #f474422a; transition: transform .2s, background .2s; }
 .play:hover, .play:focus-visible { transform: translateY(-3px); background: #ff8a58; }
 .play span { font-size: 24px; line-height: 1; }
+.diagnostic-link { display: block; width: fit-content; margin-top: 14px; color: #ffd2b9; font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.diagnostic-note { max-width: 510px; margin: 8px 0 0; color: var(--muted); font-size: 12px; }
 .play-note { max-width: 510px; margin: 18px 0 0; color: var(--muted); font-size: 13px; }
 .hero-art { position: absolute; inset: 0 0 0 44%; overflow: hidden; opacity: .82; }
 .hero-art::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 70% 50%, #f474421c, transparent 45%), linear-gradient(90deg, var(--bg), transparent 37%); z-index: 2; }
