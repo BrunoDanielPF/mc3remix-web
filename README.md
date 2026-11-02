@@ -61,24 +61,6 @@ Open `http://127.0.0.1:8620/` and click **Start**. The test server binds to loop
 
 `Shift` maps to L1, `R` or `1` to L2, `V` to L3, and `N` or `Backspace` to Select. `I`/`J`/`K`/`L` also move the left stick. During the opening, press `Z` to advance; at the memory card prompt you can choose **Continue Without Saving**. The web shell also supports a standard gamepad and on-screen touch controls.
 
-## Multiplayer development
-
-The relay is separate from the game server and can be tested locally:
-
-```bash
-python3 -m pip install -r engine/scripts/requirements-relay.txt
-python3 engine/scripts/room_relay.py
-python3 -m unittest discover -s engine/tests -p test_room_relay.py -v
-```
-
-With the local game server running, open `http://127.0.0.1:8620/room-test.html` to test room transport. That page verifies packet relay, not a completed in-game race. The original LAN flow currently requires a diagnostic build and opt-in network probes; follow the exact conditions in the [multiplayer log](docs/MULTIPLAYER_PLAN.md). Multiplayer career events, the wider Arcade race catalogue, race completion, player identity inside the original menus, and cross-machine latency are still open work.
-
-For a relay on another machine, open the **local** game page with `?relay-url=wss%3A%2F%2FYOUR_HOST&mode=multi`. The relay accepts WSS endpoints, or plain WS only on loopback. The relay must allow the browser origin `http://127.0.0.1:8620`; room invitations retain the selected relay URL. See the [VPS deployment runbook](docs/VPS_DEPLOYMENT.md) for the relay-only architecture and release gates.
-
-## Hosting boundary
-
-The current browser build expects the ISO at `/disc.iso` and contains WebAssembly translated from the proprietary game executable. **Do not publish the ISO, generated C++, or generated WebAssembly as part of this repository or a public VPS release.** A public playable release needs a client-side disc/build loading design and rights to distribute every hosted artifact. The relay can be hosted separately over HTTPS/WSS; it does not contain game assets and does not render the game. The [porting plan](docs/PORTING_PLAN.md) records the release requirements.
-
 ## Repository layout
 
 - `engine/` — PS2 recompilation pipeline, runtime, browser shell, relay, and tests.
