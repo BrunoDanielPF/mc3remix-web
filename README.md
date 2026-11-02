@@ -4,7 +4,7 @@ An experimental browser port of the **PlayStation 2 NTSC-U** release of *Midnigh
 
 **Status:** A local build boots, reaches the original menus, and drives in San Diego Cruise. Two browser instances have started and driven in the same original LAN Ordered Race. The public site now serves a playable browser build. This is still a research prototype: public cross-machine races, long sessions, sound and save persistence need further validation, and performance on integrated GPUs is below the playable target.
 
-**Play online:** [mc3-enhanced.brdanpe.tech](https://mc3-enhanced.brdanpe.tech/) provides one **Play** entry point, keyboard controls, and short instructions. Choose Solo or Multiplayer inside the game shell. The site serves the disc image and generated WebAssembly, while the relay forwards room traffic over WSS. No separate public room-test page is deployed. The user supplied authorization to distribute the hosted game artifacts; those artifacts are not committed to this repository.
+**Play online:** [mc3-enhanced.brdanpe.tech](https://mc3-enhanced.brdanpe.tech/) provides one **Play** entry point, keyboard controls, and short instructions. The browser shell has one **Jogar** button; players choose the game mode in the original menus. For LAN, connect a room before starting the game, then use the original NETWORKING menu. The site serves the disc image and generated WebAssembly, while the relay forwards room traffic over WSS. No separate public room-test page is deployed. The user supplied authorization to distribute the hosted game artifacts; those artifacts are not committed to this repository.
 
 ![Two-player Ordered Race in the browser](docs/evidence/web-ordered-race-guest-track.png)
 
@@ -13,9 +13,9 @@ An experimental browser port of the **PlayStation 2 NTSC-U** release of *Midnigh
 - **Game boot and driving:** the PS2 opening, title screen, memory card prompt, original menus, Arcade selection, and San Diego Cruise render in the browser.
 - **Local execution:** the PS2 Emotion Engine executable is translated ahead of time; the browser runs the generated WebAssembly, emulates the remaining hardware, renders through WebGPU, and streams disc sectors on demand through HTTP Range requests.
 - **Controls and saves:** keyboard, gamepad, and touch input; aspect ratio, resolution and fullscreen controls; a browser-backed virtual PS2 memory card with import and export controls. Long-session save and restore still need end-to-end validation.
-- **Multiplayer prototype:** the web shell offers Solo and Multiplayer, a player name without an account, room creation and invitations. A WebSocket relay forwards binary packets, while an opt-in virtual LAN bridge connects them to the emulated PS2 network adapter. Two instances discovered each other through the game's original **NETWORKING → Host Game / Join Game** flow, entered the original lobby, and started **Ordered Race — Rites of Passage**. Both displayed positions **1/2** and **2/2**, moved independently, and rendered the remote car. Finishing the race and final results have not been verified.
+- **Multiplayer prototype:** the web shell offers a preparatory LAN room connection, a player name without an account, room creation and invitations. A WebSocket relay forwards binary packets, while an opt-in virtual LAN bridge connects them to the emulated PS2 network adapter. Two instances discovered each other through the game's original **NETWORKING → Host Game / Join Game** flow, entered the original lobby, and started **Ordered Race — Rites of Passage**. Both displayed positions **1/2** and **2/2**, moved independently, and rendered the remote car. Finishing the race and final results have not been verified.
 - **Performance diagnostics:** reproducible save states, frame-window benchmarks, GPU/CPU counters, disc-read counters, visual captures, and opt-in renderer experiments. Selective disc preloading eliminated network reads in one Cruise test window but did not materially improve FPS; the graphics path remains the main optimization target.
-- **Public browser delivery:** versioned static release behind Nginx/TLS, HTTP Range access to the disc, precompressed WebAssembly and data, and the WebSocket relay. A public browser smoke test reached the game boot sequence in Solo mode and started the game with a connected multiplayer room; a complete public two-player race has not yet been verified.
+- **Public browser delivery:** versioned static release behind Nginx/TLS, HTTP Range access to the disc, precompressed WebAssembly and data, and the WebSocket relay. The public Solo build rendered the opening sequence. Two Edge tabs joined one room through a generated invitation and both started the game; a complete public two-player race has not yet been verified.
 
 The [porting plan](docs/PORTING_PLAN.md), [multiplayer log](docs/MULTIPLAYER_PLAN.md), [performance report](docs/PERFORMANCE.md), [performance checkpoint](docs/PERFORMANCE_CHECKPOINT.md), and [UI asset map](docs/UI_ASSETS.md) contain the test conditions and remaining work.
 
@@ -45,7 +45,7 @@ scripts/port.sh mc3remix "/absolute/path/to/your/MC3-Remix.iso" --frames 4200 --
 python3 scripts/serve.py build/web-mc3remix games/mc3remix/disc.iso
 ```
 
-Open `http://127.0.0.1:8620/` and click **Start**. The test server binds to loopback because its `/disc.iso` route exposes the selected disc to anyone who can reach it. To rebuild after editing `engine/`, copy the source into the separate build directory again and run `scripts/build_web.sh mc3remix` there.
+Open `http://127.0.0.1:8620/` and click **Jogar**. The test server binds to loopback because its `/disc.iso` route exposes the selected disc to anyone who can reach it. To rebuild after editing `engine/`, copy the source into the separate build directory again and run `scripts/build_web.sh mc3remix` there.
 
 ### Controls
 
@@ -77,7 +77,9 @@ python3 -m unittest discover -s engine/tests -p test_room_relay.py -v
 
 With the local game server running, open `http://127.0.0.1:8620/room-test.html` to test room transport. That page verifies packet relay, not a completed in-game race. The original LAN flow currently requires a diagnostic build and opt-in network probes; follow the exact conditions in the [multiplayer log](docs/MULTIPLAYER_PLAN.md). Multiplayer career events, the wider Arcade race catalogue, race completion, player identity inside the original menus, and cross-machine latency are still open work.
 
-For the public build, click **Play**, select **Multiplayer**, enter a player name, then create or join a room. After starting the game, use the original **NETWORKING → LAN Play** menu. A room connection validates the relay path; the public original LAN lobby and a complete race across separate machines remain release tests. Local builds can still point `relay-url` at `wss://mc3-enhanced.brdanpe.tech`.
+For the public build, click **Play**. To use the LAN, click **Conectar sala para LAN**, enter a player name, and create or join a room before pressing **Jogar**. Then use the original **NETWORKING → LAN Play** menu. A room connection validates the relay path; the public original LAN lobby and a complete race across separate machines remain release tests. Local builds can still point `relay-url` at `wss://mc3-enhanced.brdanpe.tech`.
+
+The room button only prepares the browser relay and virtual network adapter before the PS2 boot. It does not select a race or game mode; those choices remain in the original game menus.
 
 ## Hosting boundary
 

@@ -21,8 +21,7 @@
   button { background: #2a3a55; color: #fff; border: 0; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
   #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.6); padding: 16px; }
   #panel { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 520px; text-align: center; }
-  #mode-picker { display: flex; gap: 8px; }
-  #mode-picker button[aria-pressed="true"] { background: #4774af; }
+  #room-setup[aria-expanded="true"] { background: #4774af; }
   #room-panel { width: min(100%, 420px); padding: 12px; border: 1px solid #34405a; border-radius: 8px; background: #17202e; }
   #room-panel[hidden] { display: none; }
   #room-panel label { display: block; margin-bottom: 6px; text-align: left; }
@@ -120,7 +119,7 @@
     </div>
   </div>
 </div>
-<div id="bar"><span id="status">Loading…</span><span id="mode-status">Solo</span><button id="room-invite" type="button" hidden>Convidar</button><span id="stats"></span>
+<div id="bar"><span id="status">Loading…</span><span id="mode-status">Sem sala</span><button id="room-invite" type="button" hidden>Convidar</button><span id="stats"></span>
   <span id="input-probe" hidden aria-label="Controles de diagnóstico">
     <button type="button" data-pad-bit="14" data-pad-frames="2">X PS2</button>
     <button type="button" data-pad-bit="6" data-pad-frames="2">Baixo</button>
@@ -147,11 +146,9 @@
   <p>Midnight Club 3: DUB Edition Remix</p>
   <p>W/S: acelerar/frear · A/D: esterçar · Espaço: freio de mão · E: nitro</p>
   <p>Setas: menus/direcional · Z: X do PS2 · X: círculo · Enter: pausa</p>
-  <div id="mode-picker" role="group" aria-label="Modo de jogo">
-    <button id="mode-solo" type="button" aria-pressed="true">Jogar solo</button>
-    <button id="mode-multi" type="button" aria-pressed="false">Multiplayer</button>
-  </div>
+  <button id="room-setup" type="button" aria-expanded="false" aria-controls="room-panel">Conectar sala para LAN</button>
   <div id="room-panel" hidden>
+    <p>Conecte uma sala antes de iniciar. Depois escolha NETWORKING → LAN Play no menu do jogo.</p>
     <label for="player-name">Nome de jogador</label>
     <input id="player-name" maxlength="24" spellcheck="false" autocomplete="nickname" placeholder="Como quer aparecer na sala">
     <label for="room-code">Código da sala</label>
@@ -253,8 +250,7 @@ const statsEl = document.getElementById('stats');
 const canvas = document.getElementById('canvas');
 const params = new URLSearchParams(location.search);
 const frameLimit = /^\d+$/.test(params.get('frames') || '') ? params.get('frames') : null;
-const modeSolo = document.getElementById('mode-solo');
-const modeMulti = document.getElementById('mode-multi');
+const roomSetup = document.getElementById('room-setup');
 const roomPanel = document.getElementById('room-panel');
 const roomCodeInput = document.getElementById('room-code');
 const playerNameInput = document.getElementById('player-name');
@@ -275,14 +271,13 @@ try { playerNameInput.value = localStorage.getItem('mc3-player-name') || ''; } c
 function syncStartButton() {
   if (missing.length) return;
   startButton.disabled = !gameReady || (selectedMode === 'multi' && !roomClient?.slot);
-  startButton.textContent = selectedMode === 'solo' ? (gameReady ? 'Jogar solo' : 'Loading…')
-    : roomClient?.slot ? 'Jogar multiplayer' : 'Conecte-se à sala';
+  startButton.textContent = gameReady ? 'Jogar' : 'Loading…';
 }
 
 function selectMode(mode) {
   selectedMode = mode;
-  modeSolo.setAttribute('aria-pressed', String(mode === 'solo'));
-  modeMulti.setAttribute('aria-pressed', String(mode === 'multi'));
+  roomSetup.setAttribute('aria-expanded', String(mode === 'multi'));
+  roomSetup.textContent = mode === 'multi' ? 'Cancelar conexão da sala' : 'Conectar sala para LAN';
   roomPanel.hidden = mode !== 'multi';
   if (mode === 'solo') {
     ++roomAttempt;
@@ -292,7 +287,7 @@ function selectMode(mode) {
     hardwareMac = null;
     roomCopy.disabled = true;
     roomInvite.hidden = true;
-    modeStatus.textContent = 'Solo';
+    modeStatus.textContent = 'Sem sala';
     roomStatus.textContent = 'Crie uma sala ou digite um convite.';
   } else if (!roomClient?.slot) {
     modeStatus.textContent = 'Sala não conectada';
@@ -380,8 +375,7 @@ async function joinRoom(create) {
   }
 }
 
-modeSolo.addEventListener('click', () => selectMode('solo'));
-modeMulti.addEventListener('click', () => selectMode('multi'));
+roomSetup.addEventListener('click', () => selectMode(selectedMode === 'solo' ? 'multi' : 'solo'));
 document.getElementById('room-create').addEventListener('click', () => joinRoom(true));
 document.getElementById('room-join').addEventListener('click', () => joinRoom(false));
 async function copyRoomInvite() {
@@ -389,7 +383,10 @@ async function copyRoomInvite() {
   const invite = new URL(location.pathname, location.origin);
   invite.searchParams.set('mode', 'multi');
   invite.searchParams.set('room', roomCodeInput.value);
-  if (params.has('relay-url')) invite.searchParams.set('relay-url', params.get('relay-url'));
+  for (const key of ['ui', 'relay-url', 'card-seed', 'PS2_NETWORK_MENU_PROBE',
+                     'PS2_VIRTUAL_LAN_PROBE', 'PS2_MC_FS_PROBE', 'PS2_INPUT_PROBE',
+                     'PS2_CHUNK_WRITES'])
+    if (params.has(key)) invite.searchParams.set(key, params.get(key));
   try {
     await navigator.clipboard.writeText(invite.href);
     roomStatus.textContent = 'Convite copiado. Abra-o em outro navegador e clique Entrar na sala.';
