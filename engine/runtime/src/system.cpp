@@ -168,6 +168,7 @@ void vblank() {
                      static_cast<unsigned long long>(gs::primitives_drawn()),
                      static_cast<unsigned long long>(g_iop_synced));
         ipu::stats();
+        dmac::stats();
     }
     time_frames();
     apply_presses();
