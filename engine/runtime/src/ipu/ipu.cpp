@@ -558,6 +558,12 @@ void step() {
             g_ctrl |= kEcd;
             g_decoding = false;
             g_busy = false;
+            // A completed command still signals the IPU interrupt on hardware.
+            // Keep this opt-in until a stuck loading transition is compared both ways.
+            if (g_interrupt && std::getenv("PS2_IPU_ERROR_IRQ")) {
+                std::fprintf(stderr, "[ipu] ECD completion IRQ requested\n");
+                hw::intc_raise(8);
+            }
         }
     }
     drain();

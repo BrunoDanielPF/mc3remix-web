@@ -107,6 +107,7 @@ bool load_state(const std::uint8_t *data, std::size_t size);
 bool halted();
 const std::string &halt_reason();
 std::uint64_t frame_count();
+void request_diagnostic_snapshot();
 bool inject_network_frame(const std::uint8_t *frame, std::size_t size);
 
 bool display_frame(std::vector<std::uint32_t> &rgba, std::uint32_t &width, std::uint32_t &height);

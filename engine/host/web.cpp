@@ -422,6 +422,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void ps2web_resize(int width, int height) {
 
 extern "C" EMSCRIPTEN_KEEPALIVE double ps2web_gpu_ms() { return ps2::gpu_busy_ms(); }
 extern "C" EMSCRIPTEN_KEEPALIVE double ps2web_frames() { return static_cast<double>(ps2::frames_run()); }
+extern "C" EMSCRIPTEN_KEEPALIVE void ps2web_request_diagnostic_snapshot() { ps2::request_diagnostic_snapshot(); }
 extern "C" EMSCRIPTEN_KEEPALIVE double ps2web_disc_stat(int which) {
     if (which == 0) return static_cast<double>(g_disc_fetches.load());
     if (which == 1) return static_cast<double>(g_disc_fetched_bytes.load());

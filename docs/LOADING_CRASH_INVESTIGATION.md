@@ -21,3 +21,15 @@ For a deterministic test, save a state just before an Arcade race starts or ends
 ## Current status
 
 The failure location and out-of-range callback table read are identified. The specific upstream cause and a safe fix are not yet established. No crash fix has been deployed.
+
+## November 2 loading soft lock report
+
+The player confirmed that the image stopped changing while the frame counter kept advancing. The supplied `mc3-diagnostic-2026-11-02T19-03-41-470Z.txt` contains three page starts. Its final session ends at frame 2449 with status **Running** and about 60 emulated and presented frames per second. There is no `halt`, JavaScript exception, or `[mc3-transition]` event in the file. The first session did slow to roughly 3 fps from frame 99 through frame 356, so it may represent a separate loading/performance problem; that session also has no fatal event.
+
+Five IPU bad-code events occur in the final session at frames 1604, 1778, 1968 (twice), and 2200. They precede the player's report of a static image, but the current log does not show whether the game was waiting on disc I/O, IPU completion, or another condition. In particular, continuing frame presentation does not prove the game simulation or loading thread made progress.
+
+The diagnostic build now requests an emulation-thread snapshot every five seconds. Each snapshot records the EE PC/return address, cumulative GS primitives, IOP synchronization time, and IPU command/stall/busy state. The browser heartbeat records disc fetch count, fetched bytes, readiness misses, disc wait time, status text, and page visibility. It also records the page path and query when a diagnostic session begins. These are read-only measurements and run only in diagnostic mode.
+
+There is one opt-in experiment: `PS2_IPU_ERROR_IRQ=1` sends the IPU completion interrupt after a bad MPEG code sets ECD. The existing branch sets ECD and clears BUSY without an interrupt, whereas PCSX2 signals IPU command completion through an interrupt ([IPU worker](https://github.com/PCSX2/pcsx2/blob/master/pcsx2/IPU/IPU_MultiISA.cpp)). The flag is **off by default** until a like-for-like loading test shows it resolves the soft lock without introducing a regression. Compare baseline and flagged runs from the same state or navigation path, recording both diagnostics and whether the picture advances.
+
+A native A/B run from boot to frame 2600 reproduced all five bad codes with the same command values and decoder positions. With the flag on, five completion IRQs were requested. After removing those five extra log lines, the two full native logs were byte-for-byte identical, including the frame limit, cycle count, IPU command totals, DMA totals, and GIF/VIF totals. Thus this flag did not change the startup outcome through frame 2600 and is not a demonstrated fix for the reported soft lock. Browser presentation still needs comparison with the new heartbeat and snapshots.

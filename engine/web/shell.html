@@ -277,13 +277,23 @@ function recordDiagnostic(kind, message) {
   if (!diagnosticSaveTimer) diagnosticSaveTimer = setTimeout(saveDiagnostic, 3000);
 }
 if (diagnosticEnabled) {
-  recordDiagnostic('page', 'diagnostic mode started');
+  recordDiagnostic('page', `diagnostic mode started ${location.pathname}${location.search}`);
   window.addEventListener('error', (event) => recordDiagnostic('js-error', `${event.message} at ${event.filename}:${event.lineno}`));
   window.addEventListener('unhandledrejection', (event) => recordDiagnostic('js-rejection', event.reason));
+  const sampleLoading = () => {
+    if (!Module?.running) return 'runtime not running';
+    const disc = Module._ps2web_disc_stat;
+    const metrics = disc ? `disc_fetches=${disc(0)} disc_bytes=${disc(1)} disc_ready_misses=${disc(2)} disc_wait_ms=${disc(3).toFixed(1)}` : 'disc metrics unavailable';
+    const primitives = Module._ps2web_primitives ? Module._ps2web_primitives() : '?';
+    Module._ps2web_request_diagnostic_snapshot?.();
+    return `${statsEl.textContent} | ${metrics} primitives=${primitives} status=${statusEl.textContent} visible=${document.visibilityState}`;
+  };
   setInterval(() => {
-    if (Module?.running) recordDiagnostic('heartbeat', document.getElementById('stats').textContent);
+    recordDiagnostic('heartbeat', sampleLoading());
   }, 5000);
-  diagnosticButton.addEventListener('click', () => {
+  diagnosticButton.addEventListener('click', async () => {
+    recordDiagnostic('page', `diagnostic download requested | ${sampleLoading()}`);
+    if (Module?.running) await new Promise((resolve) => setTimeout(resolve, 250));
     recordDiagnostic('page', 'diagnostic downloaded');
     saveDiagnostic();
     const header = ['MC3 Remix browser diagnostic', `GPU: ${Module.gpuInfo || 'unknown'}`,
