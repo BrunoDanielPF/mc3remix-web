@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Midnight Club 3 Remix — prévia web</title>
+<title>Midnight Club 3 Remix — jogar</title>
 <style>
   :root { color-scheme: dark; }
   html, body { margin: 0; height: 100%; background: #0b0b0d; color: #d8d8dc; font: 13px system-ui, sans-serif; }
@@ -19,10 +19,14 @@
   }
   select { background: #2a3a55; color: #fff; border: 0; padding: 5px 8px; border-radius: 4px; }
   button { background: #2a3a55; color: #fff; border: 0; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
-  #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.6); padding: 16px; }
-  #panel { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 520px; text-align: center; }
-  #mode-picker { display: flex; gap: 8px; }
-  #mode-picker button[aria-pressed="true"] { background: #4774af; }
+  #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; overflow-y: auto; background: rgba(0,0,0,.6); padding: 16px; }
+  #panel { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 520px; margin: auto; text-align: center; }
+  #graphics-options { display: flex; flex-direction: column; align-items: center; gap: 6px; width: min(100%, 420px); }
+  #graphics-options select { max-width: 100%; }
+  #graphics-note { margin: 0; color: #b4cff3; line-height: 1.4; }
+  #telemetry-options { display: flex; align-items: flex-start; gap: 8px; max-width: 420px; color: #b4cff3; line-height: 1.4; text-align: left; }
+  #telemetry-options input { margin-top: 3px; }
+  #room-setup[aria-expanded="true"] { background: #4774af; }
   #room-panel { width: min(100%, 420px); padding: 12px; border: 1px solid #34405a; border-radius: 8px; background: #17202e; }
   #room-panel[hidden] { display: none; }
   #room-panel label { display: block; margin-bottom: 6px; text-align: left; }
@@ -31,6 +35,7 @@
   #room-status { min-height: 1.3em; margin: 10px 0 0; line-height: 1.4; }
   #room-warning { margin: 10px 0 0; color: #e8c37a; line-height: 1.4; }
   #mode-status { color: #b4cff3; white-space: nowrap; }
+  #download-diagnostic { background: #72432f; white-space: nowrap; }
   #help { margin: 0; line-height: 1.5; color: #e8c37a; }
   .controls { display: none; }
   body.touch { overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none; }
@@ -120,7 +125,7 @@
     </div>
   </div>
 </div>
-<div id="bar"><span id="status">Loading…</span><span id="mode-status">Solo</span><button id="room-invite" type="button" hidden>Convidar</button><span id="stats"></span>
+<div id="bar"><span id="status">Loading…</span><span id="mode-status">Sem sala</span><button id="room-invite" type="button" hidden>Convidar</button><span id="stats"></span><button id="telemetry-toggle" type="button" title="Ativar ou desativar métricas técnicas">Métricas: ligadas</button><button id="download-diagnostic" type="button" hidden>Baixar diagnóstico</button>
   <span id="input-probe" hidden aria-label="Controles de diagnóstico">
     <button type="button" data-pad-bit="14" data-pad-frames="2">X PS2</button>
     <button type="button" data-pad-bit="6" data-pad-frames="2">Baixo</button>
@@ -144,14 +149,23 @@
   <button id="fullscreen" type="button" title="Fullscreen (F or double click)">Fullscreen</button></div>
 <button id="exit-fullscreen" type="button">Exit fullscreen</button>
 <div id="overlay"><div id="panel">
-  <p>Midnight Club 3 Remix — prévia local</p>
+  <p>Midnight Club 3: DUB Edition Remix</p>
   <p>W/S: acelerar/frear · A/D: esterçar · Espaço: freio de mão · E: nitro</p>
   <p>Setas: menus/direcional · Z: X do PS2 · X: círculo · Enter: pausa</p>
-  <div id="mode-picker" role="group" aria-label="Modo de jogo">
-    <button id="mode-solo" type="button" aria-pressed="true">Jogar solo</button>
-    <button id="mode-multi" type="button" aria-pressed="false">Multiplayer</button>
+  <div id="graphics-options">
+    <label for="graphics-level">Nível gráfico</label>
+    <select id="graphics-level">
+      <option value="performance">Desempenho experimental · 640×512 · textura simples</option>
+      <option value="standard">Padrão · 640×512 · textura original</option>
+      <option value="quality">Qualidade · 1280×1024 · textura original</option>
+      <option value="maximum">Máximo · 1920×1536 · textura original</option>
+    </select>
+    <p id="graphics-note">A opção de desempenho reduz o custo da filtragem de textura, mas o ganho de FPS depende da GPU. Mudar a opção recarrega o jogo.</p>
   </div>
+  <label id="telemetry-options"><input id="telemetry-consent" type="checkbox" checked><span>Enviar métricas técnicas anônimas para identificar lentidão e travamentos. Sem nome, código da sala ou cartão PS2. Pode desligar aqui ou na barra do jogo.</span></label>
+  <button id="room-setup" type="button" aria-expanded="false" aria-controls="room-panel">Conectar sala para LAN</button>
   <div id="room-panel" hidden>
+    <p>Conecte uma sala antes de iniciar. Depois escolha NETWORKING → LAN Play no menu do jogo.</p>
     <label for="player-name">Nome de jogador</label>
     <input id="player-name" maxlength="24" spellcheck="false" autocomplete="nickname" placeholder="Como quer aparecer na sala">
     <label for="room-code">Código da sala</label>
@@ -252,9 +266,236 @@ importInput.addEventListener('change', async () => {
 const statsEl = document.getElementById('stats');
 const canvas = document.getElementById('canvas');
 const params = new URLSearchParams(location.search);
+const telemetryCheckbox = document.getElementById('telemetry-consent');
+const telemetryToggle = document.getElementById('telemetry-toggle');
+let telemetryEnabled = true;
+try { telemetryEnabled = localStorage.getItem('mc3-telemetry-enabled-v1') !== '0'; } catch (_) {}
+const telemetrySession = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+let telemetrySeq = 0, telemetryWindow = null, telemetryProbe = null, telemetryLastShown = 0;
+let telemetryShown = 0, telemetryProbeShown = 0;
+let telemetryScreenIntervals = [], telemetryProbeIntervals = [];
+let telemetryErrorCount = 0, telemetryLastAlertAt = -Infinity, telemetryLongTasks = 0, telemetryLongTaskMs = 0;
+let telemetryLongTaskObserver = null;
+const telemetryBuild = '20261103-telemetry2';
+function updateLongTaskObserver() {
+  if (!telemetryEnabled) {
+    telemetryLongTaskObserver?.disconnect();
+    telemetryLongTaskObserver = null;
+    return;
+  }
+  if (telemetryLongTaskObserver || typeof PerformanceObserver === 'undefined') return;
+  try {
+    telemetryLongTaskObserver = new PerformanceObserver(list => {
+    for (const entry of list.getEntries()) {
+      ++telemetryLongTasks;
+      telemetryLongTaskMs += entry.duration;
+    }
+    });
+    telemetryLongTaskObserver.observe({type: 'longtask'});
+  } catch (_) { telemetryLongTaskObserver = null; }
+}
+updateLongTaskObserver();
+function telemetryErrorCategory(value) {
+  const text = String(value || '').toLowerCase();
+  if (/out.of.memory|allocation failed|cannot allocate/.test(text)) return 'memory-allocation';
+  if (/memory access|wasm trap|unreachable/.test(text)) return 'wasm-memory-access';
+  if (/memory/.test(text)) return 'memory-error';
+  if (/device.lost|gpu.device/.test(text)) return 'gpu-device-lost';
+  if (/webgpu|gpu|shader|texture/.test(text)) return 'graphics-error';
+  if (/disc|fetch|network|timeout/.test(text)) return 'disc-or-network-error';
+  if (/abort|halt|fatal|exception|error/.test(text)) return 'runtime-error';
+  return 'unclassified-error';
+}
+function telemetryError(value) {
+  if (telemetryErrorCount++ < 5) sendTelemetry('error', {message: telemetryErrorCategory(value)});
+}
+function telemetryBrowser() {
+  const ua = navigator.userAgent;
+  const match = ua.match(/Edg\/([0-9]+)/) || ua.match(/Chrome\/([0-9]+)/) ||
+    ua.match(/Firefox\/([0-9]+)/) || ua.match(/Version\/([0-9]+).*Safari/);
+  const name = /Edg\//.test(ua) ? 'edge' : /Chrome\//.test(ua) ? 'chrome' :
+    /Firefox\//.test(ua) ? 'firefox' : /Safari/.test(ua) ? 'safari' : 'other';
+  return name + (match ? '/' + match[1].slice(0, 3) : '');
+}
+function telemetryOs() {
+  const ua = navigator.userAgent;
+  return /Android/.test(ua) ? 'android' : /iPhone|iPad|iPod/.test(ua) ? 'ios' :
+    /Windows/.test(ua) ? 'windows' : /Mac OS/.test(ua) ? 'macos' : /Linux/.test(ua) ? 'linux' : 'other';
+}
+function telemetryNumber(value, max = 60000) {
+  return Number.isFinite(value) ? +Math.min(max, Math.max(0, value)).toFixed(1) : null;
+}
+function telemetryCountDelta(current, previous, max = 10000) {
+  return Math.min(max, Math.max(0, Math.trunc(current - previous)));
+}
+function sendTelemetry(kind, extra = {}) {
+  if (!telemetryEnabled) return;
+  const gpu = String(Module?.gpuInfo || 'unknown').replace(/[^A-Za-z0-9 .()+,:-]/g, ' ').slice(0, 80) || 'unknown';
+  const payload = {v: 1, session: telemetrySession, seq: telemetrySeq++, kind,
+    build: telemetryBuild, gpu, browser: telemetryBrowser(), os: telemetryOs(),
+    graphics: graphicsLevel, visible: document.visibilityState === 'visible', ...extra};
+  try {
+    fetch('/v1/telemetry', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload), credentials: 'omit', cache: 'no-store', keepalive: true}).catch(() => {});
+  } catch (_) {}
+}
+function telemetrySnapshot() {
+  return {at: performance.now(), frame: Module._ps2web_frames(),
+    gs: Module._ps2web_render_timing_ms(0), present: Module._ps2web_render_timing_ms(1),
+    gpu: Module._ps2web_gpu_ms(), emuIdle: Module._ps2web_idle_ms(0),
+    vuIdle: Module._ps2web_idle_ms(2), gsIdle: Module._ps2web_idle_ms(1),
+    discWait: Module._ps2web_disc_stat(3), discFetches: Module._ps2web_disc_stat(0),
+    discReadyMisses: Module._ps2web_disc_stat(2), preloadHits: Module.discPreloadHits || 0,
+    primitives: Module._ps2web_primitives?.() || 0,
+    longTasks: telemetryLongTasks, longTaskMs: telemetryLongTaskMs};
+}
+function startTelemetryWindow() {
+  if (!telemetryEnabled || !Module?.running) return;
+  telemetryWindow = telemetrySnapshot();
+  telemetryProbe = telemetryWindow;
+  telemetryShown = 0;
+  telemetryProbeShown = 0;
+  telemetryLastShown = 0;
+  telemetryScreenIntervals = [];
+  telemetryProbeIntervals = [];
+}
+function sendTelemetrySample(start, shownCount, screenIntervals, trigger) {
+  const elapsed = performance.now() - start.at;
+  if (elapsed < 4000 || document.visibilityState !== 'visible') return;
+  const frame = Module._ps2web_frames();
+  const produced = telemetryCountDelta(frame, start.frame);
+  const intervals = [...screenIntervals].sort((a, b) => a - b);
+  sendTelemetry('sample', {
+    trigger, windowMs: telemetryNumber(elapsed, 120000),
+    frame: Math.trunc(frame), producedFrames: produced, shownFrames: shownCount,
+    producedFps: telemetryNumber(produced * 1000 / elapsed, 240),
+    screenFps: telemetryNumber(shownCount * 1000 / elapsed, 240),
+    screenP95Ms: intervals.length ? telemetryNumber(percentile(intervals, 0.95)) : null,
+    gsWorkMs: produced ? telemetryNumber((Module._ps2web_render_timing_ms(0) - start.gs) / produced) : null,
+    presentWaitMs: produced ? telemetryNumber((Module._ps2web_render_timing_ms(1) - start.present) / produced) : null,
+    gpuEstimateMs: produced ? telemetryNumber((Module._ps2web_gpu_ms() - start.gpu) / produced) : null,
+    emuIdlePct: telemetryNumber((Module._ps2web_idle_ms(0) - start.emuIdle) * 100 / elapsed, 100),
+    vuIdlePct: telemetryNumber((Module._ps2web_idle_ms(2) - start.vuIdle) * 100 / elapsed, 100),
+    gsIdlePct: telemetryNumber((Module._ps2web_idle_ms(1) - start.gsIdle) * 100 / elapsed, 100),
+    discWaitMs: telemetryNumber(Module._ps2web_disc_stat(3) - start.discWait),
+    discFetches: telemetryCountDelta(Module._ps2web_disc_stat(0), start.discFetches),
+    discReadyMisses: telemetryCountDelta(Module._ps2web_disc_stat(2), start.discReadyMisses),
+    discPreloadHits: telemetryCountDelta(Module.discPreloadHits || 0, start.preloadHits),
+    audioMs: telemetryNumber(Module.audioQueuedMs()),
+    heapMiB: telemetryNumber(Module.HEAPU8.length / 1048576, 16384),
+    primitivesDelta: telemetryCountDelta(Module._ps2web_primitives?.() || 0, start.primitives, 10 ** 12),
+    longTaskCount: telemetryCountDelta(telemetryLongTasks, start.longTasks),
+    longTaskMs: telemetryNumber(telemetryLongTaskMs - start.longTaskMs, 120000),
+  });
+}
+function sampleTelemetry() {
+  if (!telemetryEnabled || !Module?.running) return;
+  if (!telemetryWindow) { startTelemetryWindow(); return; }
+  if (performance.now() - telemetryWindow.at < 20000) return;
+  sendTelemetrySample(telemetryWindow, telemetryShown, telemetryScreenIntervals, 'periodic');
+  startTelemetryWindow();
+}
+function probeTelemetry() {
+  if (!telemetryEnabled || !Module?.running || document.visibilityState !== 'visible') return;
+  if (!telemetryProbe) { startTelemetryWindow(); return; }
+  const now = performance.now(), elapsed = now - telemetryProbe.at;
+  if (elapsed < 4000) return;
+  const screenFps = telemetryProbeShown * 1000 / elapsed;
+  const intervals = [...telemetryProbeIntervals].sort((a, b) => a - b);
+  const p95 = intervals.length ? percentile(intervals, 0.95) : 0;
+  const discWait = Module._ps2web_disc_stat(3) - telemetryProbe.discWait;
+  const trigger = elapsed >= 12000 ? 'timer-delay' : screenFps < 35 ? 'low-fps' :
+    p95 >= 100 ? 'stutter' : discWait >= 500 ? 'disc-stall' : null;
+  if (trigger && now - telemetryLastAlertAt >= 20000) {
+    sendTelemetrySample(telemetryProbe, telemetryProbeShown, telemetryProbeIntervals, trigger);
+    telemetryLastAlertAt = now;
+  }
+  telemetryProbe = telemetrySnapshot();
+  telemetryProbeShown = 0;
+  telemetryProbeIntervals = [];
+}
+function setTelemetry(enabled) {
+  telemetryEnabled = enabled;
+  updateLongTaskObserver();
+  telemetryCheckbox.checked = enabled;
+  telemetryToggle.textContent = enabled ? 'Métricas: ligadas' : 'Métricas: desligadas';
+  telemetryToggle.setAttribute('aria-pressed', String(enabled));
+  try { localStorage.setItem('mc3-telemetry-enabled-v1', enabled ? '1' : '0'); } catch (_) {}
+  telemetryWindow = telemetryProbe = null;
+  if (enabled && Module?.running) {
+    sendTelemetry('start', {frame: Math.trunc(Module._ps2web_frames())});
+    startTelemetryWindow();
+  }
+}
+telemetryCheckbox.checked = telemetryEnabled;
+telemetryToggle.textContent = telemetryEnabled ? 'Métricas: ligadas' : 'Métricas: desligadas';
+telemetryToggle.setAttribute('aria-pressed', String(telemetryEnabled));
+telemetryCheckbox.addEventListener('change', () => setTelemetry(telemetryCheckbox.checked));
+telemetryToggle.addEventListener('click', () => setTelemetry(!telemetryEnabled));
+window.addEventListener('error', event => telemetryError(event.message));
+window.addEventListener('unhandledrejection', event => telemetryError(event.reason?.message || event.reason));
+window.addEventListener('pagehide', () => sendTelemetry('end', {frame: Module?._ps2web_frames?.() || 0}));
+document.addEventListener('visibilitychange', () => { if (Module?.running) startTelemetryWindow(); });
+setInterval(sampleTelemetry, 30000);
+setInterval(probeTelemetry, 5000);
+const diagnosticEnabled = params.get('diagnostic') === '1';
+const diagnosticButton = document.getElementById('download-diagnostic');
+const diagnosticKey = 'mc3-diagnostic-log-v1';
+let diagnosticLines = [];
+let diagnosticSaveTimer = 0;
+if (diagnosticEnabled) {
+  diagnosticButton.hidden = false;
+  try {
+    const previous = JSON.parse(sessionStorage.getItem(diagnosticKey) || '[]');
+    if (Array.isArray(previous)) diagnosticLines = previous.filter((line) => typeof line === 'string').slice(-1500);
+  } catch (_) {}
+}
+function saveDiagnostic() {
+  clearTimeout(diagnosticSaveTimer);
+  diagnosticSaveTimer = 0;
+  try { sessionStorage.setItem(diagnosticKey, JSON.stringify(diagnosticLines)); } catch (_) {}
+}
+function recordDiagnostic(kind, message) {
+  if (!diagnosticEnabled) return;
+  const frame = typeof Module !== 'undefined' && Module._ps2web_frames && Module.running
+    ? Module._ps2web_frames() : '?';
+  const line = `${new Date().toISOString()} frame=${frame} ${kind} ${String(message).slice(0, 700)}`;
+  diagnosticLines.push(line);
+  if (diagnosticLines.length > 1500) diagnosticLines.splice(0, diagnosticLines.length - 1500);
+  if (!diagnosticSaveTimer) diagnosticSaveTimer = setTimeout(saveDiagnostic, 3000);
+}
+if (diagnosticEnabled) {
+  recordDiagnostic('page', `diagnostic mode started ${location.pathname}${location.search}`);
+  window.addEventListener('error', (event) => recordDiagnostic('js-error', `${event.message} at ${event.filename}:${event.lineno}`));
+  window.addEventListener('unhandledrejection', (event) => recordDiagnostic('js-rejection', event.reason));
+  const sampleLoading = () => {
+    if (!Module?.running) return 'runtime not running';
+    const disc = Module._ps2web_disc_stat;
+    const metrics = disc ? `disc_fetches=${disc(0)} disc_bytes=${disc(1)} disc_ready_misses=${disc(2)} disc_wait_ms=${disc(3).toFixed(1)}` : 'disc metrics unavailable';
+    const primitives = Module._ps2web_primitives ? Module._ps2web_primitives() : '?';
+    Module._ps2web_request_diagnostic_snapshot?.();
+    return `${statsEl.textContent} | ${metrics} primitives=${primitives} status=${statusEl.textContent} visible=${document.visibilityState}`;
+  };
+  setInterval(() => {
+    recordDiagnostic('heartbeat', sampleLoading());
+  }, 5000);
+  diagnosticButton.addEventListener('click', async () => {
+    recordDiagnostic('page', `diagnostic download requested | ${sampleLoading()}`);
+    if (Module?.running) await new Promise((resolve) => setTimeout(resolve, 250));
+    recordDiagnostic('page', 'diagnostic downloaded');
+    saveDiagnostic();
+    const header = ['MC3 Remix browser diagnostic', `GPU: ${Module.gpuInfo || 'unknown'}`,
+      `Browser: ${navigator.userAgent}`, `Status: ${statusEl.textContent}`, ''];
+    const blob = new Blob([header.concat(diagnosticLines).join('\n') + '\n'], {type: 'text/plain;charset=utf-8'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `mc3-diagnostic-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+  });
+}
 const frameLimit = /^\d+$/.test(params.get('frames') || '') ? params.get('frames') : null;
-const modeSolo = document.getElementById('mode-solo');
-const modeMulti = document.getElementById('mode-multi');
+const roomSetup = document.getElementById('room-setup');
 const roomPanel = document.getElementById('room-panel');
 const roomCodeInput = document.getElementById('room-code');
 const playerNameInput = document.getElementById('player-name');
@@ -275,14 +516,13 @@ try { playerNameInput.value = localStorage.getItem('mc3-player-name') || ''; } c
 function syncStartButton() {
   if (missing.length) return;
   startButton.disabled = !gameReady || (selectedMode === 'multi' && !roomClient?.slot);
-  startButton.textContent = selectedMode === 'solo' ? (gameReady ? 'Jogar solo' : 'Loading…')
-    : roomClient?.slot ? 'Abrir jogo para testar LAN' : 'Conecte-se à sala';
+  startButton.textContent = gameReady ? 'Jogar' : 'Loading…';
 }
 
 function selectMode(mode) {
   selectedMode = mode;
-  modeSolo.setAttribute('aria-pressed', String(mode === 'solo'));
-  modeMulti.setAttribute('aria-pressed', String(mode === 'multi'));
+  roomSetup.setAttribute('aria-expanded', String(mode === 'multi'));
+  roomSetup.textContent = mode === 'multi' ? 'Cancelar conexão da sala' : 'Conectar sala para LAN';
   roomPanel.hidden = mode !== 'multi';
   if (mode === 'solo') {
     ++roomAttempt;
@@ -292,7 +532,7 @@ function selectMode(mode) {
     hardwareMac = null;
     roomCopy.disabled = true;
     roomInvite.hidden = true;
-    modeStatus.textContent = 'Solo';
+    modeStatus.textContent = 'Sem sala';
     roomStatus.textContent = 'Crie uma sala ou digite um convite.';
   } else if (!roomClient?.slot) {
     modeStatus.textContent = 'Sala não conectada';
@@ -380,8 +620,7 @@ async function joinRoom(create) {
   }
 }
 
-modeSolo.addEventListener('click', () => selectMode('solo'));
-modeMulti.addEventListener('click', () => selectMode('multi'));
+roomSetup.addEventListener('click', () => selectMode(selectedMode === 'solo' ? 'multi' : 'solo'));
 document.getElementById('room-create').addEventListener('click', () => joinRoom(true));
 document.getElementById('room-join').addEventListener('click', () => joinRoom(false));
 async function copyRoomInvite() {
@@ -389,7 +628,10 @@ async function copyRoomInvite() {
   const invite = new URL(location.pathname, location.origin);
   invite.searchParams.set('mode', 'multi');
   invite.searchParams.set('room', roomCodeInput.value);
-  if (params.has('relay-url')) invite.searchParams.set('relay-url', params.get('relay-url'));
+  for (const key of ['ui', 'relay-url', 'card-seed', 'PS2_NETWORK_MENU_PROBE',
+                     'PS2_VIRTUAL_LAN_PROBE', 'PS2_MC_FS_PROBE', 'PS2_INPUT_PROBE',
+                     'PS2_CHUNK_WRITES'])
+    if (params.has(key)) invite.searchParams.set(key, params.get(key));
   try {
     await navigator.clipboard.writeText(invite.href);
     roomStatus.textContent = 'Convite copiado. Abra-o em outro navegador e clique Entrar na sala.';
@@ -474,18 +716,43 @@ function onTouch(e) {
 for (const type of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) touchRoot.addEventListener(type, onTouch, { passive: false });
 
 const scaleSelect = document.getElementById('scale');
-let scale = params.get('PS2_SCALE');
-if (!scale) {
-  try { scale = localStorage.getItem('ps2web-scale'); } catch (e) {}
+const graphicsSelect = document.getElementById('graphics-level');
+const graphicsSettings = {
+  performance: {scale: '1', filter: 'nearest'},
+  standard: {scale: '1', filter: 'original'},
+  quality: {scale: '2', filter: 'original'},
+  maximum: {scale: '3', filter: 'original'},
+};
+const validGraphics = (level) => Object.prototype.hasOwnProperty.call(graphicsSettings, level);
+let graphicsLevel = params.get('graphics');
+if (!validGraphics(graphicsLevel)) {
+  const requestedScale = params.get('PS2_SCALE');
+  if (['1', '2', '3'].includes(requestedScale)) {
+    graphicsLevel = {1: 'standard', 2: 'quality', 3: 'maximum'}[requestedScale];
+  } else {
+    try { graphicsLevel = localStorage.getItem('ps2web-graphics'); } catch (e) {}
+    if (!validGraphics(graphicsLevel)) {
+      let oldScale;
+      try { oldScale = localStorage.getItem('ps2web-scale'); } catch (e) {}
+      graphicsLevel = {2: 'quality', 3: 'maximum'}[oldScale] || 'standard';
+    }
+  }
 }
-scale = ['1', '2', '3'].includes(scale) ? scale : '1';
+const scale = graphicsSettings[graphicsLevel].scale;
+graphicsSelect.value = graphicsLevel;
 scaleSelect.value = scale;
-scaleSelect.addEventListener('change', () => {
-  try { localStorage.setItem('ps2web-scale', scaleSelect.value); } catch (e) {}
+function selectGraphics(level) {
+  try {
+    localStorage.setItem('ps2web-graphics', level);
+    localStorage.setItem('ps2web-scale', graphicsSettings[level].scale);
+  } catch (e) {}
   const url = new URL(location.href);
+  url.searchParams.delete('graphics');
   url.searchParams.delete('PS2_SCALE');
   location.href = url.href;
-});
+}
+graphicsSelect.addEventListener('change', () => selectGraphics(graphicsSelect.value));
+scaleSelect.addEventListener('change', () => selectGraphics({1: 'standard', 2: 'quality', 3: 'maximum'}[scaleSelect.value]));
 
 const aspectSelect = document.getElementById('aspect');
 let aspect = params.get('aspect');
@@ -846,6 +1113,18 @@ const countShown = (at) => {
   ++rafTicks;
   if (fresh) {
     ++shown;
+    if (telemetryEnabled && Module?.running) {
+      ++telemetryShown;
+      ++telemetryProbeShown;
+      if (telemetryLastShown) {
+        const interval = at - telemetryLastShown;
+        telemetryScreenIntervals.push(interval);
+        telemetryProbeIntervals.push(interval);
+        if (telemetryScreenIntervals.length > 4096) telemetryScreenIntervals.shift();
+        if (telemetryProbeIntervals.length > 1024) telemetryProbeIntervals.shift();
+      }
+      telemetryLastShown = at;
+    }
     if (benchmark && !benchmark.done) benchmark.shownAt.push(at);
   }
   fresh = false;
@@ -861,6 +1140,13 @@ var Module = {
   noCard: params.has('nocard'),
   presentCopy: params.has('copy'),
   onHalt: (reason) => {
+    recordDiagnostic('halt', reason);
+    sendTelemetry('halt', {frame: Math.trunc(Module._ps2web_frames?.() || 0),
+      message: telemetryErrorCategory(reason)});
+    if (diagnosticEnabled) {
+      saveDiagnostic();
+      diagnosticButton.textContent = 'Baixar diagnóstico do travamento';
+    }
     clearTimeout(noteTimer);
     noteTimer = 0;
     statusEl.textContent = 'Halted: ' + reason;
@@ -877,9 +1163,14 @@ var Module = {
     const next = new URL(target, location.origin);
     next.searchParams.set('exec-handoff', '1');
     next.searchParams.set('autostart', '1');
+    next.searchParams.set('graphics', graphicsLevel);
     if (params.has('nocard')) next.searchParams.set('nocard', '1');
     if (params.has('PS2_NETWORK_MENU_PROBE'))
       next.searchParams.set('PS2_NETWORK_MENU_PROBE', params.get('PS2_NETWORK_MENU_PROBE'));
+    if (diagnosticEnabled) {
+      next.searchParams.set('diagnostic', '1');
+      next.searchParams.set('PS2_MC3_TRANSITION_TRACE', '1');
+    }
     next.searchParams.append('arg', request.path);
     for (const arg of request.args) next.searchParams.append('arg', arg);
     const navigate = () => location.assign(next.href);
@@ -889,8 +1180,9 @@ var Module = {
       else navigate();
     });
   },
-  print: (text) => console.log(text),
-  printErr: (text) => console.log(text),
+  print: (text) => { recordDiagnostic('stdout', text); console.log(text); },
+  printErr: (text) => { recordDiagnostic('stderr', text); console.log(text);
+    if (/error|fatal|abort|device.lost|out.of.memory/i.test(text)) telemetryError(text); },
   setStatus: (text) => {
     if (!text || Module.gpuInfo) return;
     const progress = text.match(/^Downloading data\.\.\. \((\d+)\/\d+\)/);
@@ -914,8 +1206,9 @@ var Module = {
           if (seed) {
             try {
               const url = new URL(seed, location.href);
-              if (!['127.0.0.1', 'localhost'].includes(location.hostname) || url.origin !== location.origin)
-                throw new Error('card seed is limited to the local test server');
+              const localHost = ['127.0.0.1', 'localhost'].includes(location.hostname);
+              if (url.origin !== location.origin || (!localHost && url.pathname !== '/card-valid-v8.ps2'))
+                throw new Error('card seed must be the trusted file on this server');
               let existing = false;
               try { FS.stat(CARD_FILE); existing = true; } catch (_) {}
               if (!existing) {
@@ -926,7 +1219,7 @@ var Module = {
                     new TextDecoder().decode(bytes.subarray(0, 28)) !== 'Sony PS2 Memory Card Format ')
                   throw new Error('invalid PS2 memory card image');
                 FS.writeFile(CARD_FILE, bytes);
-                console.info('memory card: seeded local test card from ' + url.pathname);
+                console.info('memory card: initialized from ' + url.pathname);
               }
             } catch (error) {
               console.warn('memory card: could not seed local test card', error);
@@ -940,6 +1233,7 @@ var Module = {
     }
     for (const [key, value] of params) if (key.startsWith('PS2_')) Module.ENV[key] = value;
     Module.ENV.PS2_SCALE = scale;
+    Module.ENV.PS2_TEXTURE_FILTER = graphicsSettings[graphicsLevel].filter;
     Module.addRunDependency('disc');
     Promise.all([fetch(Module.discUrl, { method: 'HEAD' }), chooseGpu().catch((e) => 'GPU check failed: ' + e)]).then(async ([r, gpu]) => {
       Module.discSize = Number(r.headers.get('content-length')) || 0;
@@ -1098,6 +1392,8 @@ startButton.addEventListener('click', async () => {
   await startAudio();
   statusEl.textContent = 'Running, ' + Module.gpuInfo;
   Module.running = true;
+  sendTelemetry('start', {frame: Math.trunc(Module._ps2web_frames())});
+  startTelemetryWindow();
   Module.callMain(Module.arguments);
 });
 </script>

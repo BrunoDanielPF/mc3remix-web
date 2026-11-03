@@ -552,10 +552,18 @@ void step() {
             g_starved = !run_command();
             if (!g_starved) g_decoding = false;
         } catch (const BadCode &) {
-            std::fprintf(stderr, "[ipu] bad code in command 0x%08X\n", g_command);
+            std::fprintf(stderr,
+                         "[ipu] bad code in command 0x%08X bit %zu in %zu bytes next %08X ctrl %08X phase %d result %08X\n",
+                         g_command, g_bit, g_in.size(), bits_at(g_bit, 32), g_ctrl, g_phase, g_result);
             g_ctrl |= kEcd;
             g_decoding = false;
             g_busy = false;
+            // A completed command still signals the IPU interrupt on hardware.
+            // Keep this opt-in until a stuck loading transition is compared both ways.
+            if (g_interrupt && std::getenv("PS2_IPU_ERROR_IRQ")) {
+                std::fprintf(stderr, "[ipu] ECD completion IRQ requested\n");
+                hw::intc_raise(8);
+            }
         }
     }
     drain();
@@ -681,6 +689,13 @@ void stats() {
     std::fprintf(stderr, " stalls %llu out %llu qwords, busy %d decoding %d cmd 0x%08X in %zu bytes bit %zu out %zu\n",
                  static_cast<unsigned long long>(g_stalls), static_cast<unsigned long long>(g_out_qwords), g_busy, g_decoding, g_command,
                  g_in.size(), g_bit, g_out.size() - g_out_pos);
+    if (g_busy) {
+        std::fprintf(stderr, "[ipu] pending ctrl %08X result %08X phase %d starved %d irq %d next %08X input",
+                     g_ctrl, g_result, g_phase, g_starved, g_interrupt, bits_at(g_bit, 32));
+        for (std::size_t i = 0; i < std::min<std::size_t>(g_in.size(), 32); ++i)
+            std::fprintf(stderr, " %02X", g_in[i]);
+        std::fprintf(stderr, "\n");
+    }
 }
 
 }

@@ -10,6 +10,8 @@ struct Params {
 @group(0) @binding(5) var<storage, read_write> scratch: array<u32>;
 @group(0) @binding(6) var<storage, read> cache: array<u32>;
 @group(0) @binding(7) var<storage, read_write> decoded: array<u32>;
+@group(1) @binding(0) var attachment_color: texture_2d<f32>;
+@group(1) @binding(1) var attachment_depth: texture_depth_2d;
 
 override SCALE: u32 = 1u;
 
@@ -1318,8 +1320,7 @@ fn raster_fs(input: RasterTileVertex) -> @location(0) vec4<f32> {
 
 // Experimental primitive-driven path. Each draw instance covers one GS
 // primitive's pixel bounds; shade_at retains the precise GS edge rules.
-@vertex
-fn primitive_vs(@builtin(vertex_index) vertex: u32, @builtin(instance_index) primitive_index: u32) -> RasterTileVertex {
+fn primitive_quad(vertex: u32, primitive_index: u32, size: vec2<f32>) -> RasterTileVertex {
     let p = prm(1u) + primitive_index * PRIM_WORDS;
     let lo = data[p + 2u];
     let hi = data[p + 3u];
@@ -1330,11 +1331,20 @@ fn primitive_vs(@builtin(vertex_index) vertex: u32, @builtin(instance_index) pri
         select(0.0, 1.0, vertex == 1u || vertex == 4u || vertex == 5u),
         select(0.0, 1.0, vertex == 2u || vertex == 3u || vertex == 5u));
     let pixel = (origin + extent * corner) * f32(SCALE);
-    let size = 2048.0 * f32(SCALE);
     var out: RasterTileVertex;
-    out.position = vec4<f32>(pixel.x * 2.0 / size - 1.0, 1.0 - pixel.y * 2.0 / size, 0.0, 1.0);
+    out.position = vec4<f32>(pixel.x * 2.0 / size.x - 1.0, 1.0 - pixel.y * 2.0 / size.y, 0.0, 1.0);
     out.tile_index = primitive_index;
     return out;
+}
+
+@vertex
+fn primitive_vs(@builtin(vertex_index) vertex: u32, @builtin(instance_index) primitive_index: u32) -> RasterTileVertex {
+    return primitive_quad(vertex, primitive_index, vec2<f32>(2048.0, 2048.0) * f32(SCALE));
+}
+
+@vertex
+fn primitive_attachment_vs(@builtin(vertex_index) vertex: u32, @builtin(instance_index) primitive_index: u32) -> RasterTileVertex {
+    return primitive_quad(vertex, primitive_index, vec2<f32>(512.0, 448.0));
 }
 
 @fragment
@@ -1352,4 +1362,134 @@ fn primitive_fs(input: RasterTileVertex) -> @location(0) vec4<f32> {
     let s = load_setup(prm(2u) + data[p] * SETUP_WORDS);
     shade_at(p, s, x, y, k, px, py);
     return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+}
+
+// Opt-in proof of native color/depth attachments for the strict PSMT8 batch.
+// Seed and resolve make one batch correct; grouping later must remove those
+// conversions from the common case before this can be a performance path.
+struct AttachmentPixel {
+    @location(0) color: vec4<f32>,
+    @builtin(frag_depth) depth: f32,
+}
+
+@vertex
+fn attachment_seed_vs(@builtin(vertex_index) vertex: u32) -> RasterTileVertex {
+    let xy = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
+    var out: RasterTileVertex;
+    out.position = vec4<f32>(xy[vertex], 0.0, 1.0);
+    out.tile_index = 0u;
+    return out;
+}
+
+@fragment
+fn attachment_seed_fs(input: RasterTileVertex) -> AttachmentPixel {
+    let x = u32(input.position.x);
+    let y = u32(input.position.y);
+    let s = load_setup(prm(2u));
+    let raw = read_frame(s, addr(s.ff, x, y), 0u);
+    let z = load_at(addr(s.zf, x, y), 0u) & s.zmax;
+    var out: AttachmentPixel;
+    out.color = vec4<f32>(f32(raw & 0xFFu), f32((raw >> 8u) & 0xFFu),
+                          f32((raw >> 16u) & 0xFFu), f32(raw >> 24u)) / 255.0;
+    out.depth = f32(z) / f32(s.zmax);
+    return out;
+}
+
+@fragment
+fn primitive_attachment_fs(input: RasterTileVertex) -> AttachmentPixel {
+    let p = prm(1u) + input.tile_index * PRIM_WORDS;
+    let x = i32(input.position.x);
+    let y = i32(input.position.y);
+    let px = f32(x);
+    let py = f32(y);
+    let s = load_setup(prm(2u) + data[p] * SETUP_WORDS);
+    if (x < s.scax0 || x > s.scax1 || y < s.scay0 || y > s.scay1) {
+        discard;
+    }
+    let x0 = fat(p + 4u);
+    let y0 = fat(p + 5u);
+    let x1 = fat(p + 6u);
+    let y1 = fat(p + 7u);
+    let x2 = fat(p + 8u);
+    let y2 = fat(p + 9u);
+    let inv = fat(p + 10u);
+    let w0 = ((x1 - px) * (y2 - py) - (x2 - px) * (y1 - py)) * inv;
+    let w1 = ((x2 - px) * (y0 - py) - (x0 - px) * (y2 - py)) * inv;
+    let c2 = ((x0 - px) * (y1 - py) - (x1 - px) * (y0 - py)) * inv;
+    let inclusive = data[p + 27u];
+    if (!edge_in(w0, inclusive & 1u) || !edge_in(w1, inclusive & 2u) || !edge_in(c2, inclusive & 4u)) {
+        discard;
+    }
+    let w2 = 1.0 - w0 - w1;
+    let c = vertex_attr(p, 0u) * w0 + vertex_attr(p, 1u) * w1 + vertex_attr(p, 2u) * w2;
+    let t = vertex_tex(p, 0u) * w0 + vertex_tex(p, 1u) * w1 + vertex_tex(p, 2u) * w2;
+    let z = min(z_at(p, fat(p + 25u) * w1 + fat(p + 26u) * w2), s.zmax);
+    var q = t.z;
+    if (q == 0.0) {
+        q = 1.0;
+    }
+    let u = t.x / q * f32(1u << s.tw);
+    let v = t.y / q * f32(1u << s.th);
+    let tex = sample(s, u, v, 0u);
+    let tr = i32(tex & 0xFFu);
+    let tg = i32((tex >> 8u) & 0xFFu);
+    let tb = i32((tex >> 16u) & 0xFFu);
+    let ta = i32(tex >> 24u);
+    var r = i32(c.x);
+    var g = i32(c.y);
+    var b = i32(c.z);
+    var a = i32(c.w);
+    switch mode(s, 20u, 2u) {
+        case 0u {
+            r = clamp255((tr * r) >> 7u);
+            g = clamp255((tg * g) >> 7u);
+            b = clamp255((tb * b) >> 7u);
+            a = clamp255((ta * a) >> 7u);
+        }
+        case 1u {
+            r = tr; g = tg; b = tb; a = ta;
+        }
+        case 2u {
+            r = clamp255(((tr * r) >> 7u) + a);
+            g = clamp255(((tg * g) >> 7u) + a);
+            b = clamp255(((tb * b) >> 7u) + a);
+            a = clamp255(ta + a);
+        }
+        default {
+            r = clamp255(((tr * r) >> 7u) + a);
+            g = clamp255(((tg * g) >> 7u) + a);
+            b = clamp255(((tb * b) >> 7u) + a);
+            a = ta;
+        }
+    }
+    let f = i32(t.w);
+    let fr = i32(s.fogcol & 0xFFu);
+    let fg = i32((s.fogcol >> 8u) & 0xFFu);
+    let fb = i32((s.fogcol >> 16u) & 0xFFu);
+    r = (f * r + (255 - f) * fr) >> 8u;
+    g = (f * g + (255 - f) * fg) >> 8u;
+    b = (f * b + (255 - f) * fb) >> 8u;
+    var out: AttachmentPixel;
+    out.color = vec4<f32>(f32(r), f32(g), f32(b), f32(a & 0xFF)) / 255.0;
+    out.depth = f32(z) / f32(s.zmax);
+    return out;
+}
+
+@compute @workgroup_size(8, 8)
+fn attachment_resolve(@builtin(global_invocation_id) gid: vec3<u32>) {
+    let x = prm(7u) + gid.x;
+    let y = prm(8u) + gid.y;
+    if (x > prm(9u) || y > prm(10u)) {
+        return;
+    }
+    let s = load_setup(prm(2u));
+    let pos = vec2<i32>(i32(x), i32(y));
+    let c = textureLoad(attachment_color, pos, 0);
+    let z = textureLoad(attachment_depth, pos, 0);
+    let r = u32(round(c.x * 255.0));
+    let g = u32(round(c.y * 255.0));
+    let b = u32(round(c.z * 255.0));
+    let a = u32(round(c.w * 255.0));
+    write_frame(s, addr(s.ff, x, y), 0u, r | (g << 8u) | (b << 16u) | (a << 24u), 0u);
+    store(addr(s.zf, x, y), 0u, u32(round(z * f32(s.zmax))));
 }

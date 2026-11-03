@@ -380,6 +380,13 @@ void stats() {
     std::fprintf(stderr, "[dma] starts:");
     for (int ch = 0; ch < 10; ++ch) std::fprintf(stderr, " ch%d=%llu", ch, static_cast<unsigned long long>(g_starts[ch]));
     std::fprintf(stderr, "\n");
+    for (int ch : {3, 4}) {
+        const Channel &c = g_ch[ch];
+        std::fprintf(stderr, "[dma] ipu ch%d chcr %08X madr %08X qwc %u tadr %08X end %d paused %d\n",
+                     ch, c.chcr, c.madr, c.qwc, c.tadr, c.tag_end, c.paused);
+    }
+    std::fprintf(stderr, "[dma] stat %08X pending %03X ctrl %08X\n",
+                 hw::read32(0x1000E010u), hw::dmac_pending(), g_ctrl);
 }
 
 bool owns(std::uint32_t a) { return (a >= 0x10008000u && a < 0x1000E000u) || (a >= 0x1000E000u && a < 0x1000E070u); }

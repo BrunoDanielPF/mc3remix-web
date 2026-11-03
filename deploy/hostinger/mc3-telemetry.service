@@ -1,0 +1,23 @@
+[Unit]
+Description=MC3 anonymous performance telemetry collector
+After=network.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+StateDirectory=mc3-telemetry
+StateDirectoryMode=0700
+WorkingDirectory=/var/www/mc3-enhanced/current
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 telemetry/telemetry_server.py --host 127.0.0.1 --port 8622 --db /var/lib/mc3-telemetry/telemetry.sqlite3 --origin https://mc3-web.brdanpe.tech
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

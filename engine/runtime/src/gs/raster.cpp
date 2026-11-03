@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 
 namespace ps2::gs::raster {
@@ -324,7 +325,11 @@ Setup make_setup(const State &st) {
     s.tfx = static_cast<int>(c.tex0 >> 35) & 3;
     s.cpsm = static_cast<std::uint32_t>(c.tex0 >> 51) & 0xFu;
     s.csa = static_cast<std::uint32_t>(c.tex0 >> 56) & 0x1Fu;
-    s.bilinear = (c.tex1 >> 5) & 1u;
+    static const bool nearest_texture = [] {
+        const char *filter = std::getenv("PS2_TEXTURE_FILTER");
+        return filter && std::strcmp(filter, "nearest") == 0;
+    }();
+    s.bilinear = ((c.tex1 >> 5) & 1u) && !nearest_texture;
     s.wms = static_cast<int>(c.clamp) & 3;
     s.wmt = static_cast<int>(c.clamp >> 2) & 3;
     s.minu = static_cast<std::uint32_t>(c.clamp >> 4) & 0x3FFu;

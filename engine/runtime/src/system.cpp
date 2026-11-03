@@ -59,6 +59,7 @@ bool g_has_exec_request = false;
 std::uint64_t g_frames = 0;
 std::uint64_t g_iop_synced = 0;
 bool g_state_request = false;
+std::atomic<bool> g_diagnostic_snapshot_request{false};
 bool g_resumed = false;
 std::atomic<std::uint16_t> g_live_pad0_buttons{0};
 std::atomic<std::uint8_t> g_live_pad0_axes[4] = {128, 128, 128, 128};
@@ -161,6 +162,14 @@ void apply_patches(bool boot) {
 
 void vblank() {
     ++g_frames;
+    if (g_diagnostic_snapshot_request.exchange(false, std::memory_order_relaxed)) {
+        std::fprintf(stderr, "[diag] frame %llu ee_pc %08X ee_ra %08X prims %llu iop_synced %llu\n",
+                     static_cast<unsigned long long>(g_frames), g_cpu.pc, g_cpu.r[31].w[0],
+                     static_cast<unsigned long long>(gs::primitives_drawn()),
+                     static_cast<unsigned long long>(g_iop_synced));
+        ipu::stats();
+        dmac::stats();
+    }
     time_frames();
     apply_presses();
     apply_patches(false);
@@ -359,6 +368,7 @@ bool load_state(const std::string &path) {
 }
 
 std::uint64_t frame_count() { return g_frames; }
+void request_diagnostic_snapshot() { g_diagnostic_snapshot_request.store(true, std::memory_order_relaxed); }
 bool inject_network_frame(const std::uint8_t *frame, std::size_t size) {
     return iop::hw::inject_smap_frame(frame, size);
 }
