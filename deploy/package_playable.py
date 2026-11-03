@@ -24,6 +24,8 @@ def package(output: pathlib.Path, build: pathlib.Path, card: pathlib.Path) -> st
         "site/card-valid-v8.ps2": card,
         "relay/room_relay.py": ROOT / "engine/scripts/room_relay.py",
         "relay/requirements-relay.txt": ROOT / "engine/scripts/requirements-relay.txt",
+        "telemetry/telemetry_server.py": ROOT / "engine/scripts/telemetry_server.py",
+        "telemetry/telemetry_report.py": ROOT / "engine/scripts/telemetry_report.py",
     }
     files.update({f"site/{name}": build / name for name in WEB_FILES})
     output.parent.mkdir(parents=True, exist_ok=True)
