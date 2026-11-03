@@ -69,3 +69,24 @@ The remaining useful comparison is a byte/bit-level differential from **before**
 The local-only native reproduction state is `build/native-transition-probe/ipu-stuck-2200.state` in the WSL build checkout at `/home/brdanpe/midnightclubweb-ps2-recomp`. It is 45 MB and intentionally excluded from Git along with the ISO and generated code. Load it with `ps2run games/mc3remix/disc/SLUS_213.55 --disc <local-iso> --load-state build/native-transition-probe/ipu-stuck-2200.state --frames 2300 --ntsc` to compare a candidate fix against the stable 50,176-primitive wait.
 
 The local ISO's SHA-1 is `ac1ce1a1c07cf3252fecb0c8f9a5ed710722153d`, matching the catalogued USA disc image in [HFS DB](https://db.hfsplay.fr/games/95808). Its SHA-256 also matches the VPS copy (see `VPS_DEPLOYMENT.md`). This rules out a truncated local download or transfer mismatch for this reproduction; it does not identify which emulator behavior diverges from the console.
+
+## Paused investigation handoff (November 3)
+
+The investigation is paused at the player's request. No candidate crash fix was added to the game runtime or deployed. The `develop` checkout was clean before these notes and the local-only experiments were restored.
+
+Additional evidence from the frame-1500 checkpoint:
+
+- The final guest buffer contains the demultiplexed video bytes in the same order as `VIDEO/MC3INTRO.PSS`. The input DMA ends at RAM address `0x00A68050` with QWC 0, ten valid video payload bytes before the next PSS pack boundary. Reading past the programmed DMA would consume stale RAM; it is not a safe fix.
+- The last visible MPEG slice start code before the wait is `0x00000114`, at PSS offset `0x78FE29`. The trace contains 19 completed BDEC macroblocks after it before the stuck BDEC. Thus the wait occurs inside a slice and at a packet boundary, not at the end of the movie.
+- The EE scheduler is active during the wait. A 30-frame native run from the frame-2200 state logged 2,922 switches to EE thread 7 and 2,921 switches to EE thread 1, with 50,176 GS primitives throughout. Equal-priority thread starvation is not the immediate explanation.
+- The final observed input DMA was programmed by EE thread 1 for 1,278 qwords from `0x00A63070` and completed at `0x00A68050`. The log is retained locally as `build/native-transition-probe/dma-1500-2220.log` in the separate WSL checkout. The earlier DMA from `0x00A568F0` for 4,470 qwords ended at the same address.
+- The motion-vector VDEC result length differed from the PCSX2 reference for nonzero values. Adjusting that result in a native-only run from frame 1500 to 2300 left the same five invalid-code events, final BDEC wait, DMA address, and primitive count. The experiment was restored.
+- An exhaustive comparison of all 65,536 possible 16-bit prefixes for both first and subsequent DCT table-zero coefficients, plus all 512 coded-block-pattern prefixes, found **zero VLC table differences** against PCSX2's `mpeg2_vlc.h`. The comparison helper is `engine/scripts/compare_ipu_vlc.py`; pass it a separately downloaded copy of [PCSX2's table header](https://github.com/PCSX2/pcsx2/blob/master/pcsx2/IPU/mpeg2_vlc.h). This verifies table entries, not all decoder control flow or command timing.
+
+Resume in this order:
+
+1. Use the frame-1500 state to trace the **first byte/bit-position divergence**, preferably against PCSX2 executing the same disc or an independent IPU reference. Focus on BDEC command boundaries and the video buffer transition before the final DMA ends. Do not start by replaying an entire race.
+2. Trace the game's video buffer refill condition and input DMA programming around `0x00A68050`: whether ten trailing video bytes are carried into the next buffer, whether another PSS video packet is queued, and why the EE waits for IPU BUSY instead of submitting more data. Compare the same handoff with the original game's expected IPU FIFO and DMA behavior.
+3. Test a specific correction in the isolated native build from frame 1500. Require GS primitives and video frames to progress past the stable 50,176-primitive wait and reach the menu without invalid callback calls. Then verify the opening video and an Arcade enter/exit transition in a browser. Check visual output and FPS before publishing.
+
+The reference header, native states, ISO, and trace logs are local-only and must remain outside Git. The comparison helper does not incorporate PCSX2's GPL source.
