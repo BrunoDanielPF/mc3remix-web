@@ -1,19 +1,21 @@
 # VPS deployment: playable site and multiplayer relay
 
-The public site at [mc3-enhanced.brdanpe.tech](https://mc3-enhanced.brdanpe.tech/) has one primary **Play** entry point, a keyboard map, brief instructions, and an optional **Jogar com diagnóstico de travamentos** link. The game shell contains one **Jogar** button and optional LAN room setup before boot; players select the mode inside the original game menus. The public release does not include the standalone room-test page. The browser executes the generated WebAssembly and renders locally. Nginx serves static files and disc sectors; a loopback WebSocket service relays room packets.
+The public site at [mc3-web.brdanpe.tech](https://mc3-web.brdanpe.tech/) has one primary **Play** entry point, a keyboard map, brief instructions, and an optional **Jogar com diagnóstico de travamentos** link. The game shell contains one **Jogar** button, a graphics-level selector, and optional LAN room setup before boot; players select the mode inside the original game menus. The public release does not include the standalone room-test page. The browser executes the generated WebAssembly and renders locally. Nginx serves static files and disc sectors; a loopback WebSocket service relays room packets.
 
 The project owner supplied authorization to redistribute the game artifacts on this VPS. That authorization has not been independently verified and does not extend to third parties. Keep the ISO, generated code, WebAssembly, saves, and release archives out of Git.
 
-## Live installation (2 November 2026)
+## Live installation (3 November 2026)
 
-- Domain: `mc3-enhanced.brdanpe.tech`; VPS: `179.199.141.253`; SSH user: `engenhalab-admin`, port 22, key-based access with passwordless sudo. Root SSH remains disabled.
-- Active release: `/var/www/mc3-enhanced/releases/20261102T193202Z`, selected by `/var/www/mc3-enhanced/current`. The previous release `20261102T191357Z` remains available for rollback; both releases have their own pinned relay virtual environment. Older releases are retained.
+- Domain: `mc3-web.brdanpe.tech`, A record to `179.199.141.253`; SSH user: `engenhalab-admin`, port 22, key-based access with passwordless sudo. Root SSH remains disabled.
+- Active release: `/var/www/mc3-enhanced/releases/20261103T155530Z`, selected by `/var/www/mc3-enhanced/current`. The previous release `20261102T193202Z` and its Nginx/systemd configuration were saved under `/var/www/mc3-enhanced/rollback-20261103T155530Z` for rollback. Older releases remain available.
 - Disc: `/var/lib/mc3-enhanced/disc.iso`, 8,539,963,392 bytes, SHA-256 `de199f7e7f57b7cb603a129217f7482d50644fd66558450dfeb5612857b732f9`. Nginx maps only `/disc.iso` to this path and supports HTTP Range.
-- Playable archive: `build/vps/mc3-enhanced-loading-trace-20261102.tar.gz`, SHA-256 `f7ce7a4b94e3e7612375c252703f430f6dd0bc0ad07008459b07bb851b5f63ef`; verified on the VPS before extraction. It contains the landing page, browser build with an opt-in Arcade loading probe and IPU/DMA loading snapshots, virtual LAN client, preconfigured virtual PS2 card, relay, and pinned requirements. The disc is transferred separately.
-- Nginx site: `/etc/nginx/sites-available/mc3-enhanced`, enabled by its matching symlink. TLS is managed by Certbot under `/etc/letsencrypt/live/mc3-enhanced.brdanpe.tech/`.
-- Relay: `mc3-enhanced-relay.service` runs unprivileged on `127.0.0.1:8621`. Nginx proxies `/v1/rooms/` to it over loopback. Do not expose port 8621 publicly.
+- Playable archive: `build/vps/mc3-web-graphics-20261103.tar.gz`, SHA-256 `3b4a44f5f9123d09dc95f077b61f5ca12d74d6b6cf731dc6cb608994d82ce7e5`; verified on the VPS before extraction. It contains the landing page, browser build from the existing transition-probe generated game with the graphics selector, virtual LAN client, preconfigured virtual PS2 card, relay, and pinned requirements. The disc is transferred separately.
+- Nginx site: `/etc/nginx/sites-available/mc3-web`, enabled by its matching symlink; the former site's enabled symlink is removed. TLS is managed by Certbot under `/etc/letsencrypt/live/mc3-web.brdanpe.tech/` and expires on 1 February 2027 unless renewed.
+- Relay: `mc3-enhanced-relay.service` runs unprivileged on `127.0.0.1:8621`, accepts the new HTTPS origin, and is proxied under `/v1/rooms/`. Do not expose port 8621 publicly.
 
 ## What has been verified
+
+- On 3 November, `nginx -t` passed after the hostname switch, the relay restarted and stayed active, the new HTTPS page and game shell returned 200, the WebAssembly and disc returned 206 for 32-byte Range requests, and two WSS clients joined one room and exchanged a binary packet. The public shell contained the graphics selector and texture-filter setting. The former hostname's enabled site was removed and its A record no longer resolved through 1.1.1.1 after the DNS change. FPS and long-session browser play were not remeasured in this deployment.
 
 - Archive and ISO SHA-256 matched between local and VPS copies; `nginx -t` passed; the relay service started.
 - HTTPS returned 200 for the landing page, game shell, scripts, styles, and card seed. WebAssembly and game data use precompressed files. `/disc.iso` returned 206 for an HTTP Range request. `/room.html` returned 404. There is no public HTTP health endpoint; the relay is checked through its service status and WebSocket connections.
@@ -45,7 +47,7 @@ The packager has an explicit member list and rejects missing files, symlinks, an
 
 Stage the archive in a new `/var/www/mc3-enhanced/releases/<UTC timestamp>` directory, verify its SHA-256 on the VPS, extract it, and create the relay virtual environment from the pinned requirements. Keep the shared disc and any persistent data outside release directories. Test the candidate on loopback before changing `current`.
 
-The Nginx template is [nginx-tls.conf](../deploy/hostinger/nginx-tls.conf). It provides HTTPS, cross-origin isolation, WebAssembly and audio-worklet CSP allowances, JavaScript MIME for `virtual-lan.mjs`, static gzip, Range access to the disc, and WSS proxying. Run `nginx -t` before every reload. Keep other sites' Nginx blocks and services untouched.
+The Nginx template is [nginx-tls.conf](../deploy/hostinger/nginx-tls.conf). It provides HTTPS, cross-origin isolation, WebAssembly and audio-worklet CSP allowances, JavaScript MIME for `virtual-lan.mjs`, static gzip, Range access to the disc, and WSS proxying. Before activating it, create the target A record, issue a certificate for the new hostname, and verify the site on loopback with the new Host header. Run `nginx -t` before every reload. Keep other sites' Nginx blocks and services untouched.
 
 ## Activate, verify, and roll back
 

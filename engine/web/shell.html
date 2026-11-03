@@ -19,8 +19,11 @@
   }
   select { background: #2a3a55; color: #fff; border: 0; padding: 5px 8px; border-radius: 4px; }
   button { background: #2a3a55; color: #fff; border: 0; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
-  #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.6); padding: 16px; }
-  #panel { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 520px; text-align: center; }
+  #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; overflow-y: auto; background: rgba(0,0,0,.6); padding: 16px; }
+  #panel { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 520px; margin: auto; text-align: center; }
+  #graphics-options { display: flex; flex-direction: column; align-items: center; gap: 6px; width: min(100%, 420px); }
+  #graphics-options select { max-width: 100%; }
+  #graphics-note { margin: 0; color: #b4cff3; line-height: 1.4; }
   #room-setup[aria-expanded="true"] { background: #4774af; }
   #room-panel { width: min(100%, 420px); padding: 12px; border: 1px solid #34405a; border-radius: 8px; background: #17202e; }
   #room-panel[hidden] { display: none; }
@@ -147,6 +150,16 @@
   <p>Midnight Club 3: DUB Edition Remix</p>
   <p>W/S: acelerar/frear · A/D: esterçar · Espaço: freio de mão · E: nitro</p>
   <p>Setas: menus/direcional · Z: X do PS2 · X: círculo · Enter: pausa</p>
+  <div id="graphics-options">
+    <label for="graphics-level">Nível gráfico</label>
+    <select id="graphics-level">
+      <option value="performance">Desempenho experimental · 640×512 · textura simples</option>
+      <option value="standard">Padrão · 640×512 · textura original</option>
+      <option value="quality">Qualidade · 1280×1024 · textura original</option>
+      <option value="maximum">Máximo · 1920×1536 · textura original</option>
+    </select>
+    <p id="graphics-note">A opção de desempenho reduz o custo da filtragem de textura, mas o ganho de FPS depende da GPU. Mudar a opção recarrega o jogo.</p>
+  </div>
   <button id="room-setup" type="button" aria-expanded="false" aria-controls="room-panel">Conectar sala para LAN</button>
   <div id="room-panel" hidden>
     <p>Conecte uma sala antes de iniciar. Depois escolha NETWORKING → LAN Play no menu do jogo.</p>
@@ -528,18 +541,43 @@ function onTouch(e) {
 for (const type of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) touchRoot.addEventListener(type, onTouch, { passive: false });
 
 const scaleSelect = document.getElementById('scale');
-let scale = params.get('PS2_SCALE');
-if (!scale) {
-  try { scale = localStorage.getItem('ps2web-scale'); } catch (e) {}
+const graphicsSelect = document.getElementById('graphics-level');
+const graphicsSettings = {
+  performance: {scale: '1', filter: 'nearest'},
+  standard: {scale: '1', filter: 'original'},
+  quality: {scale: '2', filter: 'original'},
+  maximum: {scale: '3', filter: 'original'},
+};
+const validGraphics = (level) => Object.prototype.hasOwnProperty.call(graphicsSettings, level);
+let graphicsLevel = params.get('graphics');
+if (!validGraphics(graphicsLevel)) {
+  const requestedScale = params.get('PS2_SCALE');
+  if (['1', '2', '3'].includes(requestedScale)) {
+    graphicsLevel = {1: 'standard', 2: 'quality', 3: 'maximum'}[requestedScale];
+  } else {
+    try { graphicsLevel = localStorage.getItem('ps2web-graphics'); } catch (e) {}
+    if (!validGraphics(graphicsLevel)) {
+      let oldScale;
+      try { oldScale = localStorage.getItem('ps2web-scale'); } catch (e) {}
+      graphicsLevel = {2: 'quality', 3: 'maximum'}[oldScale] || 'standard';
+    }
+  }
 }
-scale = ['1', '2', '3'].includes(scale) ? scale : '1';
+const scale = graphicsSettings[graphicsLevel].scale;
+graphicsSelect.value = graphicsLevel;
 scaleSelect.value = scale;
-scaleSelect.addEventListener('change', () => {
-  try { localStorage.setItem('ps2web-scale', scaleSelect.value); } catch (e) {}
+function selectGraphics(level) {
+  try {
+    localStorage.setItem('ps2web-graphics', level);
+    localStorage.setItem('ps2web-scale', graphicsSettings[level].scale);
+  } catch (e) {}
   const url = new URL(location.href);
+  url.searchParams.delete('graphics');
   url.searchParams.delete('PS2_SCALE');
   location.href = url.href;
-});
+}
+graphicsSelect.addEventListener('change', () => selectGraphics(graphicsSelect.value));
+scaleSelect.addEventListener('change', () => selectGraphics({1: 'standard', 2: 'quality', 3: 'maximum'}[scaleSelect.value]));
 
 const aspectSelect = document.getElementById('aspect');
 let aspect = params.get('aspect');
@@ -936,6 +974,7 @@ var Module = {
     const next = new URL(target, location.origin);
     next.searchParams.set('exec-handoff', '1');
     next.searchParams.set('autostart', '1');
+    next.searchParams.set('graphics', graphicsLevel);
     if (params.has('nocard')) next.searchParams.set('nocard', '1');
     if (params.has('PS2_NETWORK_MENU_PROBE'))
       next.searchParams.set('PS2_NETWORK_MENU_PROBE', params.get('PS2_NETWORK_MENU_PROBE'));
@@ -1004,6 +1043,7 @@ var Module = {
     }
     for (const [key, value] of params) if (key.startsWith('PS2_')) Module.ENV[key] = value;
     Module.ENV.PS2_SCALE = scale;
+    Module.ENV.PS2_TEXTURE_FILTER = graphicsSettings[graphicsLevel].filter;
     Module.addRunDependency('disc');
     Promise.all([fetch(Module.discUrl, { method: 'HEAD' }), chooseGpu().catch((e) => 'GPU check failed: ' + e)]).then(async ([r, gpu]) => {
       Module.discSize = Number(r.headers.get('content-length')) || 0;

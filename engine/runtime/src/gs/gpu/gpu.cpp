@@ -30,8 +30,8 @@ namespace ps2::gs::gpu {
 
 namespace {
 
-enum Pipeline { kUpload, kCopyRead, kCopyWrite, kLoadClut, kDisplay, kRaster, kResolve, kSnapshot, kDecode, kPreBatch, kRasterSprite, kPipelines };
-const char *const kEntryPoints[kPipelines] = {"upload", "copy_read", "copy_write", "load_clut", "display", "raster", "resolve", "snapshot", "decode", "pre_batch", "raster_sprite"};
+enum Pipeline { kUpload, kCopyRead, kCopyWrite, kLoadClut, kDisplay, kRaster, kResolve, kSnapshot, kDecode, kPreBatch, kRasterSprite, kAttachmentResolve, kPipelines };
+const char *const kEntryPoints[kPipelines] = {"upload", "copy_read", "copy_write", "load_clut", "display", "raster", "resolve", "snapshot", "decode", "pre_batch", "raster_sprite", "attachment_resolve"};
 
 constexpr std::uint32_t kParamStride = 256;
 constexpr std::uint32_t kClutSlots = 2048;
@@ -77,6 +77,8 @@ bool g_render_tile_all = false;
 std::uint64_t g_render_tile_frame = 0;
 std::size_t g_render_tile_command = 0;
 bool g_primitive_pass = false;
+bool g_attachment_pass = false;
+bool g_nearest_texture = false;
 bool g_primitive_pass_skip = false;
 bool g_primitive_pass_compute = false;
 bool g_primitive_pass_all = false;
@@ -86,13 +88,20 @@ WGPUBuffer g_primitive_probe = nullptr;
 #endif
 std::uint64_t g_params_size = 0, g_data_size = 0;
 WGPUBindGroupLayout g_layout = nullptr;
+WGPUBindGroupLayout g_attachment_layout = nullptr;
 WGPUPipelineLayout g_pipeline_layout = nullptr;
+WGPUPipelineLayout g_attachment_draw_layout = nullptr;
 WGPUBindGroup g_group = nullptr;
+WGPUBindGroup g_attachment_group = nullptr;
 WGPUComputePipeline g_pipelines[kPipelines] = {};
 WGPURenderPipeline g_tile_pipeline = nullptr;
 WGPURenderPipeline g_primitive_pipeline = nullptr;
+WGPURenderPipeline g_attachment_seed_pipeline = nullptr;
+WGPURenderPipeline g_attachment_primitive_pipeline = nullptr;
 WGPUTexture g_tile_texture = nullptr;
 WGPUTextureView g_tile_view = nullptr;
+WGPUTexture g_attachment_color = nullptr, g_attachment_depth = nullptr;
+WGPUTextureView g_attachment_color_view = nullptr, g_attachment_depth_view = nullptr;
 
 struct Command {
     Pipeline pipeline;
@@ -895,7 +904,9 @@ void flush_batch() {
             g_fastpath_stats.broad_no_z_prims += prims;
         }
     }
-    const std::uint32_t param = push_params({tile_offset, prim_offset, setup_offset, tiles, list_offset, snapshot_lo, snapshot_hi});
+    const std::uint32_t param = push_params({tile_offset, prim_offset, setup_offset, tiles, list_offset, snapshot_lo, snapshot_hi,
+                                             static_cast<std::uint32_t>(std::max(0, b.minx)), static_cast<std::uint32_t>(std::max(0, b.miny)),
+                                             static_cast<std::uint32_t>(std::min(511, b.maxx)), static_cast<std::uint32_t>(std::min(447, b.maxy))});
     note_raster(prims, tiles, total, snapshot);
     bool sprite_batch = g_sprite_fast && tiles >= 128;
     for (std::uint32_t i = 0; sprite_batch && i < prims; ++i)
@@ -1400,7 +1411,12 @@ void submit(WGPUTextureView present_view = nullptr) {
     writes.endOfPassWriteIndex = 1;
     WGPUComputePassDescriptor cd = WGPU_COMPUTE_PASS_DESCRIPTOR_INIT;
     if (measure) cd.timestampWrites = &writes;
-    WGPUComputePassEncoder pass = wgpuCommandEncoderBeginComputePass(enc, &cd);
+    const auto begin_compute = [&] {
+        WGPUComputePassEncoder next = wgpuCommandEncoderBeginComputePass(enc, &cd);
+        if (g_attachment_pass) wgpuComputePassEncoderSetBindGroup(next, 1, g_attachment_group, 0, nullptr);
+        return next;
+    };
+    WGPUComputePassEncoder pass = begin_compute();
     Pipeline current = kPipelines;
     ++g_submits;
     ++g_total_passes;
@@ -1413,8 +1429,53 @@ void submit(WGPUTextureView present_view = nullptr) {
 #ifndef __EMSCRIPTEN__
             if (c.primitive_probe) wgpuCommandEncoderCopyBufferToBuffer(enc, g_vram, 0, g_primitive_probe, 0, kMemorySize);
 #endif
-            pass = wgpuCommandEncoderBeginComputePass(enc, &cd);
+            pass = begin_compute();
             current = kPipelines;
+            continue;
+        }
+        if (c.primitive_pass && g_attachment_pass) {
+            wgpuComputePassEncoderEnd(pass);
+            wgpuComputePassEncoderRelease(pass);
+            WGPURenderPassColorAttachment color = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
+            color.view = g_attachment_color_view;
+            color.loadOp = WGPULoadOp_Load;
+            color.storeOp = WGPUStoreOp_Store;
+            WGPURenderPassDepthStencilAttachment depth = WGPU_RENDER_PASS_DEPTH_STENCIL_ATTACHMENT_INIT;
+            depth.view = g_attachment_depth_view;
+            depth.depthLoadOp = WGPULoadOp_Load;
+            depth.depthStoreOp = WGPUStoreOp_Store;
+            WGPURenderPassDescriptor rd = WGPU_RENDER_PASS_DESCRIPTOR_INIT;
+            rd.colorAttachmentCount = 1;
+            rd.colorAttachments = &color;
+            rd.depthStencilAttachment = &depth;
+            WGPURenderPassEncoder rp = wgpuCommandEncoderBeginRenderPass(enc, &rd);
+            const auto &bounds = g_param_records[c.param];
+            const std::uint32_t left = bounds[7], top = bounds[8];
+            const std::uint32_t width = bounds[9] - left + 1, height = bounds[10] - top + 1;
+            wgpuRenderPassEncoderSetScissorRect(rp, left, top, width, height);
+            const std::uint32_t offset = c.param * kParamStride;
+            wgpuRenderPassEncoderSetPipeline(rp, g_attachment_seed_pipeline);
+            wgpuRenderPassEncoderSetBindGroup(rp, 0, g_group, 1, &offset);
+            wgpuRenderPassEncoderDraw(rp, 3, 1, 0, 0);
+            wgpuRenderPassEncoderSetPipeline(rp, g_attachment_primitive_pipeline);
+            wgpuRenderPassEncoderDraw(rp, 6, c.instances, 0, 0);
+            wgpuRenderPassEncoderEnd(rp);
+            wgpuRenderPassEncoderRelease(rp);
+            pass = begin_compute();
+            wgpuComputePassEncoderSetPipeline(pass, g_pipelines[kAttachmentResolve]);
+            wgpuComputePassEncoderSetBindGroup(pass, 0, g_group, 1, &offset);
+            wgpuComputePassEncoderSetBindGroup(pass, 1, g_attachment_group, 0, nullptr);
+            wgpuComputePassEncoderDispatchWorkgroups(pass, (width + 7) / 8, (height + 7) / 8, 1);
+            ++g_dispatches[kAttachmentResolve];
+            current = kPipelines;
+#ifndef __EMSCRIPTEN__
+            if (c.primitive_probe) {
+                wgpuComputePassEncoderEnd(pass);
+                wgpuComputePassEncoderRelease(pass);
+                wgpuCommandEncoderCopyBufferToBuffer(enc, g_vram, 0, g_primitive_probe, 0, kMemorySize);
+                pass = begin_compute();
+            }
+#endif
             continue;
         }
         if (c.tile_pass || c.primitive_pass) {
@@ -1432,13 +1493,14 @@ void submit(WGPUTextureView present_view = nullptr) {
             wgpuRenderPassEncoderSetPipeline(rp, c.primitive_pass ? g_primitive_pipeline : g_tile_pipeline);
             const std::uint32_t offset = c.param * kParamStride;
             wgpuRenderPassEncoderSetBindGroup(rp, 0, g_group, 1, &offset);
+            if (g_attachment_pass) wgpuRenderPassEncoderSetBindGroup(rp, 1, g_attachment_group, 0, nullptr);
             wgpuRenderPassEncoderDraw(rp, 6, c.instances, 0, 0);
             wgpuRenderPassEncoderEnd(rp);
             wgpuRenderPassEncoderRelease(rp);
 #ifndef __EMSCRIPTEN__
             if (c.primitive_probe) wgpuCommandEncoderCopyBufferToBuffer(enc, g_vram, 0, g_primitive_probe, 0, kMemorySize);
 #endif
-            pass = wgpuCommandEncoderBeginComputePass(enc, &cd);
+            pass = begin_compute();
             current = kPipelines;
             ++g_dispatches[c.pipeline];
             continue;
@@ -1456,7 +1518,7 @@ void submit(WGPUTextureView present_view = nullptr) {
             wgpuComputePassEncoderEnd(pass);
             wgpuComputePassEncoderRelease(pass);
             wgpuCommandEncoderCopyBufferToBuffer(enc, g_vram, 0, g_primitive_probe, 0, kMemorySize);
-            pass = wgpuCommandEncoderBeginComputePass(enc, &cd);
+            pass = begin_compute();
             current = kPipelines;
         }
 #endif
@@ -1858,11 +1920,20 @@ bool init(Mode m) {
     g_split_fastpath = std::getenv("PS2_FASTPATH_SPLIT") != nullptr;
     g_sprite_fast = std::getenv("PS2_SPRITE_FAST") != nullptr;
     g_skip_raster = std::getenv("PS2_GPU_SKIP_RASTER") != nullptr;
+    g_attachment_pass = std::getenv("PS2_ATTACHMENT_PASS") != nullptr;
+    const char *texture_filter = std::getenv("PS2_TEXTURE_FILTER");
+    g_nearest_texture = texture_filter && std::strcmp(texture_filter, "nearest") == 0;
     if (const char *spec = std::getenv("PS2_PRIMITIVE_PASS")) {
         g_primitive_pass = true;
         g_primitive_pass_skip = std::strcmp(spec, "skip") == 0 || std::strcmp(spec, "all-skip") == 0;
         g_primitive_pass_compute = std::strcmp(spec, "compute") == 0 || std::strcmp(spec, "all-compute") == 0;
         g_primitive_pass_all = std::strncmp(spec, "all", 3) == 0;
+    }
+    if (g_attachment_pass) {
+        g_primitive_pass = true;
+        g_primitive_pass_skip = false;
+        g_primitive_pass_compute = false;
+        g_primitive_pass_all = false;
     }
     if (const char *spec = std::getenv("PS2_RASTER_PASS")) {
         unsigned long long frame = 0;
@@ -1910,10 +1981,31 @@ bool init(Mode m) {
     ld.entryCount = 8;
     ld.entries = le;
     g_layout = wgpuDeviceCreateBindGroupLayout(g_device, &ld);
+    if (g_attachment_pass) {
+        WGPUBindGroupLayoutEntry textures[2] = {};
+        for (std::uint32_t i = 0; i < 2; ++i) {
+            textures[i] = WGPU_BIND_GROUP_LAYOUT_ENTRY_INIT;
+            textures[i].binding = i;
+            textures[i].visibility = WGPUShaderStage_Compute;
+            textures[i].texture.sampleType = i == 0 ? WGPUTextureSampleType_Float : WGPUTextureSampleType_Depth;
+            textures[i].texture.viewDimension = WGPUTextureViewDimension_2D;
+        }
+        WGPUBindGroupLayoutDescriptor textures_desc = WGPU_BIND_GROUP_LAYOUT_DESCRIPTOR_INIT;
+        textures_desc.entryCount = 2;
+        textures_desc.entries = textures;
+        g_attachment_layout = wgpuDeviceCreateBindGroupLayout(g_device, &textures_desc);
+        if (!g_attachment_layout) return false;
+    }
+    WGPUBindGroupLayout layouts[2] = {g_layout, g_attachment_layout};
     WGPUPipelineLayoutDescriptor pld = WGPU_PIPELINE_LAYOUT_DESCRIPTOR_INIT;
-    pld.bindGroupLayoutCount = 1;
-    pld.bindGroupLayouts = &g_layout;
+    pld.bindGroupLayoutCount = g_attachment_pass ? 2 : 1;
+    pld.bindGroupLayouts = layouts;
     g_pipeline_layout = wgpuDeviceCreatePipelineLayout(g_device, &pld);
+    if (g_attachment_pass) {
+        pld.bindGroupLayoutCount = 1;
+        g_attachment_draw_layout = wgpuDeviceCreatePipelineLayout(g_device, &pld);
+        if (!g_attachment_draw_layout) return false;
+    }
 
     WGPUShaderSourceWGSL source = WGPU_SHADER_SOURCE_WGSL_INIT;
     source.code = view(kGsShader);
@@ -1921,7 +2013,7 @@ bool init(Mode m) {
     md.nextInChain = &source.chain;
     WGPUShaderModule module = wgpuDeviceCreateShaderModule(g_device, &md);
     for (int i = 0; i < kPipelines; ++i) {
-        if (i == kRasterSprite && !g_sprite_fast) continue;
+        if ((i == kRasterSprite && !g_sprite_fast) || (i == kAttachmentResolve && !g_attachment_pass)) continue;
         WGPUComputePipelineDescriptor cd = WGPU_COMPUTE_PIPELINE_DESCRIPTOR_INIT;
         cd.layout = g_pipeline_layout;
         cd.compute.module = module;
@@ -1934,7 +2026,7 @@ bool init(Mode m) {
         g_pipelines[i] = wgpuDeviceCreateComputePipeline(g_device, &cd);
         if (!g_pipelines[i]) return false;
     }
-    if (g_render_tile_pass || g_primitive_pass) {
+    if (g_render_tile_pass || (g_primitive_pass && !g_attachment_pass)) {
         WGPUColorTargetState color = WGPU_COLOR_TARGET_STATE_INIT;
         color.format = WGPUTextureFormat_RGBA8Unorm;
         color.writeMask = 0;
@@ -1959,7 +2051,7 @@ bool init(Mode m) {
         if (!pipeline) return false;
         if (g_render_tile_pass) g_tile_pipeline = pipeline;
         else g_primitive_pipeline = pipeline;
-        if (g_render_tile_pass && g_primitive_pass) {
+        if (g_render_tile_pass && g_primitive_pass && !g_attachment_pass) {
             fragment.entryPoint = view("primitive_fs");
             rd.vertex.entryPoint = view("primitive_vs");
             g_primitive_pipeline = wgpuDeviceCreateRenderPipeline(g_device, &rd);
@@ -1976,6 +2068,68 @@ bool init(Mode m) {
         if (!g_tile_texture) return false;
         g_tile_view = wgpuTextureCreateView(g_tile_texture, nullptr);
         if (!g_tile_view) return false;
+    }
+    if (g_attachment_pass) {
+        WGPUTextureDescriptor td = WGPU_TEXTURE_DESCRIPTOR_INIT;
+        td.dimension = WGPUTextureDimension_2D;
+        td.size = WGPUExtent3D{512, 448, 1};
+        td.mipLevelCount = 1;
+        td.sampleCount = 1;
+        td.usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_TextureBinding;
+        td.format = WGPUTextureFormat_RGBA8Unorm;
+        g_attachment_color = wgpuDeviceCreateTexture(g_device, &td);
+        td.format = WGPUTextureFormat_Depth32Float;
+        g_attachment_depth = wgpuDeviceCreateTexture(g_device, &td);
+        if (!g_attachment_color || !g_attachment_depth) return false;
+        g_attachment_color_view = wgpuTextureCreateView(g_attachment_color, nullptr);
+        g_attachment_depth_view = wgpuTextureCreateView(g_attachment_depth, nullptr);
+        if (!g_attachment_color_view || !g_attachment_depth_view) return false;
+
+        WGPUBindGroupEntry entries[2] = {};
+        entries[0] = WGPU_BIND_GROUP_ENTRY_INIT;
+        entries[0].binding = 0;
+        entries[0].textureView = g_attachment_color_view;
+        entries[1] = WGPU_BIND_GROUP_ENTRY_INIT;
+        entries[1].binding = 1;
+        entries[1].textureView = g_attachment_depth_view;
+        WGPUBindGroupDescriptor gd = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
+        gd.layout = g_attachment_layout;
+        gd.entryCount = 2;
+        gd.entries = entries;
+        g_attachment_group = wgpuDeviceCreateBindGroup(g_device, &gd);
+        if (!g_attachment_group) return false;
+
+        WGPUColorTargetState color = WGPU_COLOR_TARGET_STATE_INIT;
+        color.format = WGPUTextureFormat_RGBA8Unorm;
+        WGPUFragmentState fragment = WGPU_FRAGMENT_STATE_INIT;
+        fragment.module = module;
+        fragment.entryPoint = view("attachment_seed_fs");
+        fragment.targetCount = 1;
+        fragment.targets = &color;
+        WGPUConstantEntry constant = WGPU_CONSTANT_ENTRY_INIT;
+        constant.key = view("SCALE");
+        constant.value = static_cast<double>(g_scale);
+        fragment.constantCount = 1;
+        fragment.constants = &constant;
+        WGPUDepthStencilState depth = WGPU_DEPTH_STENCIL_STATE_INIT;
+        depth.format = WGPUTextureFormat_Depth32Float;
+        depth.depthWriteEnabled = WGPUOptionalBool_True;
+        depth.depthCompare = WGPUCompareFunction_Always;
+        WGPURenderPipelineDescriptor rd = WGPU_RENDER_PIPELINE_DESCRIPTOR_INIT;
+        rd.layout = g_attachment_draw_layout;
+        rd.vertex.module = module;
+        rd.vertex.entryPoint = view("attachment_seed_vs");
+        rd.vertex.constantCount = 1;
+        rd.vertex.constants = &constant;
+        rd.fragment = &fragment;
+        rd.depthStencil = &depth;
+        g_attachment_seed_pipeline = wgpuDeviceCreateRenderPipeline(g_device, &rd);
+        if (!g_attachment_seed_pipeline) return false;
+        fragment.entryPoint = view("primitive_attachment_fs");
+        rd.vertex.entryPoint = view("primitive_attachment_vs");
+        depth.depthCompare = WGPUCompareFunction_GreaterEqual;
+        g_attachment_primitive_pipeline = wgpuDeviceCreateRenderPipeline(g_device, &rd);
+        if (!g_attachment_primitive_pipeline) return false;
     }
     wgpuShaderModuleRelease(module);
     ensure_capacity();
@@ -1996,6 +2150,10 @@ void draw(const State &st, const Vertex *v, int count) {
         cache.clut = g_clut_slot;
         const std::uint32_t *w = cache.setup;
         cache.flags = make_setup(st, attr, cache.setup);
+        if (g_nearest_texture) {
+            cache.setup[0] &= ~16384u;
+            cache.flags &= ~16384u;
+        }
         cache.key = static_cast<std::uint64_t>(w[1]) | (static_cast<std::uint64_t>(w[2]) << 14) | (static_cast<std::uint64_t>(w[3]) << 20) |
                     (static_cast<std::uint64_t>(w[5]) << 26) | (static_cast<std::uint64_t>(w[6]) << 40);
         if (cache.flags & 2u) {
