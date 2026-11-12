@@ -4,7 +4,16 @@ The public site at [mc3-web.brdanpe.tech](https://mc3-web.brdanpe.tech/) has an 
 
 The project owner supplied authorization to redistribute the game artifacts on this VPS. That authorization has not been independently verified and does not extend to third parties. Keep the ISO, generated code, WebAssembly, saves, and release archives out of Git.
 
-## Live installation (4 November 2026)
+## Live installation (12 November 2026)
+
+- Active release: `/var/www/mc3-enhanced/releases/20261112T110500Z`, selected atomically by `/var/www/mc3-enhanced/current`. The previous release `20261104T030517Z` and its Nginx configuration `/etc/nginx/sites-available/mc3-web.pre-20261112T110500Z` remain for rollback.
+- Web archive: `build/vps/mc3-multiplayer-20261112.tar.gz`, SHA-256 `fcac194a63dc8c6578ece81ea1c1861abe02305c9d741466ff82f8225675e8ab`. The local archive and five transferred release files matched their VPS hashes. The WebAssembly and game shell matched the local multiplayer build.
+- Nginx serves the derived `/var/lib/mc3-enhanced/disc-multiplayer.iso`, SHA-256 `12ffef3ded21bded4104e8357ef5deb60683306124c10158a4b00aee6e2536c8`, through `/disc.iso`. The original ISO remains unchanged at `/var/lib/mc3-enhanced/disc.iso`, SHA-256 `de199f7e7f57b7cb603a129217f7482d50644fd66558450dfeb5612857b732f9`. Both are 8,539,963,392 bytes. The Nginx configuration differs from the prior version only in the disc alias and the new `/v2/network` proxy route.
+- `mc3-enhanced-relay.service`, `mc3-telemetry.service`, and Nginx are active. The relay serves the room browser on `/v2/network` and retains `/v1/rooms/` compatibility.
+- Public HTTPS returned 200 for the homepage, game shell, CSS, and room client, and 206 for 32-byte WebAssembly and disc Range requests. Public WSS checks created and joined a public room, marked it ready, exchanged a binary packet, rejected a wrong private PIN, accepted the correct PIN, and exchanged a legacy v1 packet. The telemetry endpoint returned 204 for a valid-origin event and 403 for a foreign Origin; the synthetic event was removed. Nginx syntax passed.
+- A public browser smoke started from the homepage and advanced the game to frame 145 with no page error and no legacy HTML room panel. The local two-instance test reached the native lobby with both players; a complete public race between separate machines and a fresh public boot showing the **MULTIPLAYER** title have not yet been visually verified.
+
+## Previous installation (4 November 2026)
 
 - Domain: `mc3-web.brdanpe.tech`, A record to `179.199.141.253`; SSH user: `engenhalab-admin`, port 22, key-based access with passwordless sudo. Root SSH remains disabled.
 - Active release: `/var/www/mc3-enhanced/releases/20261104T030517Z`, selected by `/var/www/mc3-enhanced/current`. It copies the previous release and replaces only `site/index.html` and `site/style.css` for the English homepage and removal of the diagnostic link. Release `20261103T164717Z` remains available for rollback. A consistent database backup taken before the additive schema migration is stored at `/var/backups/mc3-telemetry/telemetry-20261103T164717Z.sqlite3` with root-only access. Older releases remain available.
