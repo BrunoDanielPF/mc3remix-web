@@ -1,4 +1,5 @@
 #include "ps2/disc.hpp"
+#include "ps2/memory.hpp"
 #include "ps2/system.hpp"
 
 #include <emscripten.h>
@@ -300,6 +301,8 @@ double g_next_frame = 0.0;
 std::atomic<double> g_emulation_idle{0.0}, g_render_idle{0.0};
 std::atomic<double> g_render_work{0.0}, g_present_wait{0.0}, g_render_sleep{0.0}, g_render_yield{0.0};
 std::mutex g_network_rx_mutex;
+std::atomic<bool> g_virtual_lan_enabled{false};
+std::atomic<bool> g_multiplayer_waiting{false};
 std::deque<std::vector<std::uint8_t>> g_network_rx;
 unsigned g_network_rx_block_reports = 0;
 
@@ -404,7 +407,51 @@ extern "C" EMSCRIPTEN_KEEPALIVE int ps2web_enable_virtual_lan(int slot, int trac
                              "PS2_SMAP_DMA_PROBE", "PS2_SMAP_RX_PROBE", "PS2_SMAP_BRIDGE_PROBE"})
         if (setenv(flag, "1", 1) != 0) return 0;
     const char mac_slot[] = {static_cast<char>('0' + slot), 0};
-    return setenv("PS2_SMAP_MAC_SLOT", mac_slot, 1) == 0;
+    if (setenv("PS2_SMAP_MAC_SLOT", mac_slot, 1) != 0) return 0;
+    g_virtual_lan_enabled.store(true, std::memory_order_release);
+    return 1;
+}
+
+// The game owns these UTF-16 menu widgets. Locate the three adjacent native
+// Networking rows, then change only their text buffers (65 code units each).
+// This keeps the game's font, focus highlight and controller navigation.
+extern "C" EMSCRIPTEN_KEEPALIVE int ps2web_multiplayer_menu_text(int row, const char *label) {
+    if (row < 0 || row > 2 || !label) return -3;
+    const auto length = std::strlen(label);
+    if (length > 63) return -3;
+    for (std::size_t i = 0; i < length; ++i)
+        if (static_cast<unsigned char>(label[i]) < 32 || static_cast<unsigned char>(label[i]) > 126)
+            return -3;
+    auto matches = [](std::size_t at, const char *value) {
+        for (std::size_t j = 0; value[j]; ++j)
+            if (ps2::g_ram[at + j * 2] != static_cast<std::uint8_t>(value[j]) ||
+                ps2::g_ram[at + j * 2 + 1] != 0) return false;
+        return ps2::g_ram[at + std::strlen(value) * 2] == 0 &&
+               ps2::g_ram[at + std::strlen(value) * 2 + 1] == 0;
+    };
+    static std::size_t rows = 0;
+    if (!rows) {
+        for (std::size_t at = 0; at + 390 < ps2::kRamSize; at += 2) {
+            if (matches(at, "Internet Play") && matches(at + 130, "LAN Play") &&
+                matches(at + 260, "Network configuration")) {
+                rows = at;
+                break;
+            }
+        }
+    }
+    if (!rows) return -1;
+    const std::size_t target = rows + static_cast<std::size_t>(row) * 130;
+    for (std::size_t i = 0; i < length; ++i) {
+        ps2::g_ram[target + i * 2] = static_cast<std::uint8_t>(label[i]);
+        ps2::g_ram[target + i * 2 + 1] = 0;
+    }
+    ps2::g_ram[target + length * 2] = 0;
+    ps2::g_ram[target + length * 2 + 1] = 0;
+    return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void ps2web_resume_multiplayer() {
+    g_multiplayer_waiting.store(false, std::memory_order_release);
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE void ps2web_pad_connected(int pad, int connected) { ps2::set_pad_connected(pad, connected != 0); }
@@ -473,15 +520,25 @@ int main(int argc, char **argv) {
     g_disc_url = ps2web_disc_url();
     g_state_url = ps2web_state_url();
     ps2::g_options.on_vblank = on_vblank;
-    if (std::getenv("PS2_SMAP_BRIDGE_PROBE")) {
-        ps2::g_options.on_smap_tx = [](const std::uint8_t *frame, std::size_t size, bool loopback) {
-            if (loopback) return;
-            // Proxy synchronously so the stack-backed frame stays valid until JS copies it.
-            MAIN_THREAD_EM_ASM({
-                if (Module.ps2NetworkTx) Module.ps2NetworkTx(HEAPU8.slice($0, $0 + $1));
-            }, frame, size);
-        };
-    }
+    ps2::g_options.on_multiplayer_screen = [](int screen) {
+        if (screen == 0) g_multiplayer_waiting.store(true, std::memory_order_release);
+        MAIN_THREAD_ASYNC_EM_ASM({
+            const name = $0 === 0 ? 'browse' : $0 === 1 ? 'host_join' :
+                $0 === 2 ? 'host_options' : $0 === 3 ? 'join_list' : 'lobby';
+            if (Module.onMultiplayerScreen) Module.onMultiplayerScreen(name);
+        }, screen);
+        if (screen == 0) {
+            while (g_multiplayer_waiting.load(std::memory_order_acquire)) usleep(1000);
+        }
+    };
+    ps2::g_options.on_smap_tx = [](const std::uint8_t *frame, std::size_t size, bool loopback) {
+        if (loopback || !g_virtual_lan_enabled.load(std::memory_order_acquire)) return;
+        // The room enables this after the game starts. Copy the stack-backed
+        // frame synchronously before the SMAP callback returns.
+        MAIN_THREAD_EM_ASM({
+            if (Module.ps2NetworkTx) Module.ps2NetworkTx(HEAPU8.slice($0, $0 + $1));
+        }, frame, size);
+    };
     ps2::g_options.on_vu_program = [](const std::string &name, const std::uint8_t *code, std::size_t size) {
         static bool unsupported = false;
         if (unsupported) return;

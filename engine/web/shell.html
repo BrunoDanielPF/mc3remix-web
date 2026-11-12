@@ -8,8 +8,9 @@
   :root { color-scheme: dark; }
   html, body { margin: 0; height: 100%; background: #0b0b0d; color: #d8d8dc; font: 13px system-ui, sans-serif; }
   body { display: flex; flex-direction: column; }
-  #stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
+  #stage { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
   canvas { width: 100%; height: 100%; display: block; background: #000; }
+  #multiplayer-transition-frame { position: absolute; inset: 0; width: 100%; height: 100%; display: none; pointer-events: none; object-fit: fill; }
   #bar { display: flex; gap: 16px; align-items: center; padding: 6px 12px; background: #141418; border-top: 1px solid #222; }
   #status { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #stats { font-variant-numeric: tabular-nums; color: #9ad; }
@@ -26,14 +27,6 @@
   #graphics-note { margin: 0; color: #b4cff3; line-height: 1.4; }
   #telemetry-options { display: flex; align-items: flex-start; gap: 8px; max-width: 420px; color: #b4cff3; line-height: 1.4; text-align: left; }
   #telemetry-options input { margin-top: 3px; }
-  #room-setup[aria-expanded="true"] { background: #4774af; }
-  #room-panel { width: min(100%, 420px); padding: 12px; border: 1px solid #34405a; border-radius: 8px; background: #17202e; }
-  #room-panel[hidden] { display: none; }
-  #room-panel label { display: block; margin-bottom: 6px; text-align: left; }
-  #room-code, #player-name { box-sizing: border-box; width: 100%; padding: 8px; margin-bottom: 9px; color: #fff; background: #101722; border: 1px solid #4a5d7a; border-radius: 4px; font: inherit; }
-  #room-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; }
-  #room-status { min-height: 1.3em; margin: 10px 0 0; line-height: 1.4; }
-  #room-warning { margin: 10px 0 0; color: #e8c37a; line-height: 1.4; }
   #mode-status { color: #b4cff3; white-space: nowrap; }
   #download-diagnostic { background: #72432f; white-space: nowrap; }
   #help { margin: 0; line-height: 1.5; color: #e8c37a; }
@@ -101,7 +94,7 @@
 </style>
 </head>
 <body>
-<div id="stage"><canvas id="canvas" tabindex="0"></canvas></div>
+<div id="stage"><canvas id="canvas" tabindex="0"></canvas><img id="multiplayer-transition-frame" alt="" aria-hidden="true"></div>
 <div id="touch" class="controls" aria-hidden="true">
   <div class="cluster left">
     <div class="shoulders"><div class="ctl shoulder" data-btn="256">L2</div><div class="ctl shoulder" data-btn="1024">L1</div></div>
@@ -125,7 +118,7 @@
     </div>
   </div>
 </div>
-<div id="bar"><span id="status">Loading…</span><span id="mode-status">Sem sala</span><button id="room-invite" type="button" hidden>Convidar</button><span id="stats"></span><button id="telemetry-toggle" type="button" title="Ativar ou desativar métricas técnicas">Métricas: ligadas</button><button id="download-diagnostic" type="button" hidden>Baixar diagnóstico</button>
+<div id="bar"><span id="status">Loading…</span><span id="mode-status">Sem sala</span><span id="stats"></span><button id="telemetry-toggle" type="button" title="Ativar ou desativar métricas técnicas">Métricas: ligadas</button><button id="download-diagnostic" type="button" hidden>Baixar diagnóstico</button>
   <span id="input-probe" hidden aria-label="Controles de diagnóstico">
     <button type="button" data-pad-bit="14" data-pad-frames="2">X PS2</button>
     <button type="button" data-pad-bit="6" data-pad-frames="2">Baixo</button>
@@ -163,21 +156,6 @@
     <p id="graphics-note">A opção de desempenho reduz o custo da filtragem de textura, mas o ganho de FPS depende da GPU. Mudar a opção recarrega o jogo.</p>
   </div>
   <label id="telemetry-options"><input id="telemetry-consent" type="checkbox" checked><span>Enviar métricas técnicas anônimas para identificar lentidão e travamentos. Sem nome, código da sala ou cartão PS2. Pode desligar aqui ou na barra do jogo.</span></label>
-  <button id="room-setup" type="button" aria-expanded="false" aria-controls="room-panel">Conectar sala para LAN</button>
-  <div id="room-panel" hidden>
-    <p>Conecte uma sala antes de iniciar. Depois escolha NETWORKING → LAN Play no menu do jogo.</p>
-    <label for="player-name">Nome de jogador</label>
-    <input id="player-name" maxlength="24" spellcheck="false" autocomplete="nickname" placeholder="Como quer aparecer na sala">
-    <label for="room-code">Código da sala</label>
-    <input id="room-code" maxlength="32" spellcheck="false" autocomplete="off" placeholder="32 caracteres hexadecimais">
-    <div id="room-actions">
-      <button id="room-create" type="button">Criar sala</button>
-      <button id="room-join" type="button">Entrar na sala</button>
-      <button id="room-copy" type="button" disabled>Copiar convite</button>
-    </div>
-    <p id="room-status" role="status">Crie uma sala ou digite um convite.</p>
-    <p id="room-warning">Sem conta. O progresso fica no cartão PS2 virtual do navegador. Multiplayer experimental: lobby e Cruise testados; desempenho e outras corridas ainda em validação.</p>
-  </div>
   <p id="help" hidden></p><button id="start" disabled>Loading…</button>
 </div></div>
 <script>
@@ -265,6 +243,7 @@ importInput.addEventListener('change', async () => {
 });
 const statsEl = document.getElementById('stats');
 const canvas = document.getElementById('canvas');
+const multiplayerTransitionFrame = document.getElementById('multiplayer-transition-frame');
 const params = new URLSearchParams(location.search);
 const telemetryCheckbox = document.getElementById('telemetry-consent');
 const telemetryToggle = document.getElementById('telemetry-toggle');
@@ -495,154 +474,345 @@ if (diagnosticEnabled) {
   });
 }
 const frameLimit = /^\d+$/.test(params.get('frames') || '') ? params.get('frames') : null;
-const roomSetup = document.getElementById('room-setup');
-const roomPanel = document.getElementById('room-panel');
-const roomCodeInput = document.getElementById('room-code');
-const playerNameInput = document.getElementById('player-name');
-const roomStatus = document.getElementById('room-status');
-const roomCopy = document.getElementById('room-copy');
-const roomInvite = document.getElementById('room-invite');
 const modeStatus = document.getElementById('mode-status');
 const startButton = document.getElementById('start');
-let selectedMode = params.get('mode') === 'multi' ? 'multi' : 'solo';
 let roomClient = null;
 let virtualLan = null;
 let hardwareMac = null;
 let gameReady = false;
-let roomAttempt = 0;
-roomCodeInput.value = params.get('room') || '';
-try { playerNameInput.value = localStorage.getItem('mc3-player-name') || ''; } catch {}
+let availableRooms = [];
+let selectedRoom = null;
+let menuPath = null;
+let menuPresses = [];
+let guestJoinScheduled = false;
+let hostRevealFrame = 0;
+let guestRevealFrame = 0;
+let technicalMenu = false;
+let multiplayerTransitionHidden = false;
+let multiplayerTransitionEpoch = 0;
+let hostSetupActive = false;
+let hostSetupCrosses = 0;
+let hostCrossHeld = false;
+let hostBackHeld = false;
+const nativeMenu = { active: false, stage: 'rooms', index: 0, held: 0, page: 0,
+  pin: '0000', digit: 0, status: '', room: null, textRetries: 0 };
+let cachedPlayerName = '';
+try { cachedPlayerName = localStorage.getItem('mc3-player-name') || ''; } catch {}
+if (/^Jogador [0-9]{4}$/.test(cachedPlayerName)) {
+  cachedPlayerName = cachedPlayerName.replace('Jogador', 'Player');
+  try { localStorage.setItem('mc3-player-name', cachedPlayerName); } catch {}
+}
+if (!cachedPlayerName) {
+  cachedPlayerName = 'Player ' + String(1000 + Math.floor(Math.random() * 9000));
+  try { localStorage.setItem('mc3-player-name', cachedPlayerName); } catch {}
+}
 
 function syncStartButton() {
   if (missing.length) return;
-  startButton.disabled = !gameReady || (selectedMode === 'multi' && !roomClient?.slot);
+  startButton.disabled = !gameReady;
   startButton.textContent = gameReady ? 'Jogar' : 'Loading…';
 }
 
-function selectMode(mode) {
-  selectedMode = mode;
-  roomSetup.setAttribute('aria-expanded', String(mode === 'multi'));
-  roomSetup.textContent = mode === 'multi' ? 'Cancelar conexão da sala' : 'Conectar sala para LAN';
-  roomPanel.hidden = mode !== 'multi';
-  if (mode === 'solo') {
-    ++roomAttempt;
-    roomClient?.close();
-    roomClient = null;
-    virtualLan = null;
-    hardwareMac = null;
-    roomCopy.disabled = true;
-    roomInvite.hidden = true;
-    modeStatus.textContent = 'Sem sala';
-    roomStatus.textContent = 'Crie uma sala ou digite um convite.';
-  } else if (!roomClient?.slot) {
-    modeStatus.textContent = 'Sala não conectada';
-  }
-  syncStartButton();
+function playerName() {
+  const name = cachedPlayerName.trim();
+  if (!name || name.length > 24 || [...name].some(ch => ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127))
+    throw new Error('Invalid player name');
+  return name;
 }
 
-async function joinRoom(create) {
-  const attempt = ++roomAttempt;
+function relayOrigin() {
+  const testPort = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
+    && /^\d{2,5}$/.test(params.get('relay-port') || '') ? params.get('relay-port') : '8621';
+  const relay = params.get('relay-url') ? new URL(params.get('relay-url')) : new URL(
+    location.protocol === 'https:' ? `wss://${location.host}` : `ws://${location.hostname}:${testPort}`);
+  const loopback = /^(localhost|127\.0\.0\.1)$/.test(relay.hostname);
+  if (relay.protocol !== 'wss:' && !(relay.protocol === 'ws:' && loopback))
+    throw new Error('O servidor de salas precisa usar WSS.');
+  if (relay.username || relay.password || relay.search || relay.hash || relay.pathname !== '/')
+    throw new Error('Endereço inválido para o servidor de salas.');
+  return relay.origin;
+}
+
+function renderRooms() {
+  renderNativeMenu();
+}
+
+function writeNativeLabel(row, value) {
+  if (!Module._ps2web_multiplayer_menu_text) return false;
+  const label = String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7e]/g, ' ').slice(0, 63);
+  const bytes = new TextEncoder().encode(label);
+  const ptr = Module._malloc(bytes.length + 1);
+  if (!ptr) return false;
   try {
-    const playerName = playerNameInput.value.trim();
-    if (!playerName || playerName.length > 24 || [...playerName].some((ch) => ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127))
-      throw new Error('Informe um nome de até 24 caracteres.');
-    playerNameInput.value = playerName;
-    try { localStorage.setItem('mc3-player-name', playerName); } catch {}
-    if (create) {
-      const { newRoomCode } = await import('./room-client.js');
-      if (attempt !== roomAttempt || selectedMode !== 'multi') return;
-      roomCodeInput.value = newRoomCode();
+    Module.HEAPU8.set(bytes, ptr);
+    Module.HEAPU8[ptr + bytes.length] = 0;
+    return Module._ps2web_multiplayer_menu_text(row, ptr) === 1;
+  } finally { Module._free(ptr); }
+}
+
+function renderNativeMenu() {
+  if (!nativeMenu.active) return;
+  const n = nativeMenu;
+  let labels;
+  if (n.stage === 'rooms') {
+    const pages = Math.max(1, Math.ceil(availableRooms.length / 2));
+    n.page = Math.min(n.page, pages - 1);
+    labels = [`Create Room  ${n.page + 1}/${pages}  L/R: PAGES`];
+    for (let i = 0; i < 2; i++) {
+      const room = availableRooms[n.page * 2 + i];
+      const name = room && room.name.length > 26 ? room.name.slice(0, 23) + '...' : room?.name;
+      labels.push(room ? `${room.private ? '[PRIVATE] ' : ''}${name}  ${room.players}/${room.capacity}` +
+        (room.players >= room.capacity ? ' FULL' : room.state !== 'ready' ? ' SETUP' : '') :
+        i === 0 && !availableRooms.length ? 'No rooms available' : 'Refresh Rooms');
     }
-    const code = roomCodeInput.value.trim().toLowerCase();
-    if (!/^[0-9a-f]{32}$/.test(code)) throw new Error('O código precisa ter 32 caracteres hexadecimais.');
-    roomCodeInput.value = code;
-    roomClient?.close();
-    roomClient = null;
-    virtualLan = null;
-    hardwareMac = null;
-    roomCopy.disabled = true;
-    roomInvite.hidden = true;
-    roomStatus.textContent = 'Conectando à sala…';
-    syncStartButton();
-    const { RoomClient } = await import('./room-client.js');
-    if (attempt !== roomAttempt || selectedMode !== 'multi') return;
-    const testPort = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
-      && /^\d{2,5}$/.test(params.get('relay-port') || '') ? params.get('relay-port') : '8621';
-    const configuredRelay = params.get('relay-url');
-    const relay = configuredRelay ? new URL(configuredRelay) : new URL(
-      location.protocol === 'https:' ? `wss://${location.host}` : `ws://${location.hostname}:${testPort}`);
-    const loopbackRelay = /^(localhost|127\.0\.0\.1)$/.test(relay.hostname);
-    if (relay.protocol !== 'wss:' && !(relay.protocol === 'ws:' && loopbackRelay))
-      throw new Error('The relay must use WSS, except on localhost');
-    if (relay.username || relay.password || relay.search || relay.hash || relay.pathname !== '/')
-      throw new Error('The relay URL must contain only its origin');
-    const client = new RoomClient(relay.origin, code, playerName);
-    roomClient = client;
-    const update = () => {
-      if (roomClient !== client) return;
-      const others = client.peers.size;
-      roomStatus.textContent = `Sala conectada · ${client.name} · ${others} outro${others === 1 ? '' : 's'} conectado${others === 1 ? '' : 's'}`;
-      modeStatus.textContent = `Sala ${code.slice(0, 8)} · ${others + 1} online`;
+  } else if (n.stage === 'type') labels = ['Public Room', 'Private Room', 'Back'];
+  else if (n.stage === 'limit') labels = ['2 Racers', '3 Racers', '4 Racers'];
+  else if (n.stage === 'private_create') labels = [`PIN: ${n.pin}  (X: CHANGE)`, 'Create and Host', 'Back'];
+  else if (n.stage === 'private_join') labels = [`PIN: ${n.pin}  ${n.digit + 1}/4  X:+  L/R: DIGIT`, 'Join Game', 'Back'];
+  else if (n.stage === 'busy') labels = [n.status || 'Connecting...', 'Please wait', ' '];
+  else labels = [n.status || 'Connection error', 'Room List', 'Back'];
+  let ready = true;
+  for (let i = 0; i < 3; i++) ready = writeNativeLabel(i, labels[i]) && ready;
+  if (!ready && n.textRetries++ < 30)
+    setTimeout(() => { if (nativeMenu.active) renderNativeMenu(); }, 100);
+}
+
+function setNativeStage(stage) {
+  for (let i = 0; i < nativeMenu.index; i++) scheduleMenuPress(4, 2 + i * 25, 8);
+  nativeMenu.index = 0;
+  nativeMenu.stage = stage;
+  nativeMenu.held = 0;
+  renderNativeMenu();
+}
+
+function isGameListing(frame) {
+  const bytes = frame instanceof Uint8Array ? frame : new Uint8Array(frame);
+  if (bytes.length < 120 || bytes[12] !== 8 || bytes[13] !== 0 || bytes[23] !== 17) return false;
+  const udp = 14 + (bytes[14] & 15) * 4;
+  return bytes.length >= udp + 8 && ((bytes[udp] << 8) | bytes[udp + 1]) === 3658
+    && ((bytes[udp + 2] << 8) | bytes[udp + 3]) === 3658;
+}
+
+async function openMultiplayer() {
+  if (roomClient?.slot) return;
+  nativeMenu.active = true;
+  nativeMenu.stage = 'rooms';
+  nativeMenu.index = 0;
+  nativeMenu.page = 0;
+  nativeMenu.textRetries = 0;
+  renderNativeMenu();
+  Module._ps2web_resume_multiplayer();
+  try {
+    if (!roomClient || roomClient.socket.readyState !== WebSocket.OPEN) {
+      const { MultiplayerClient } = await import('./room-client.js');
+      const client = new MultiplayerClient(relayOrigin());
+      roomClient = client;
+      client.addEventListener('rooms', event => {
+        if (roomClient !== client) return;
+        availableRooms = event.detail;
+        renderRooms();
+      });
+      client.addEventListener('packet', event => {
+        if (roomClient === client && client.slot) {
+          traceLanFrame('rx', event.detail);
+          Module.ps2NetworkRx?.(event.detail);
+          if (menuPath === 'guest' && !guestJoinScheduled && isGameListing(event.detail)) {
+            guestJoinScheduled = true;
+            modeStatus.textContent = 'Game found. Entering lobby...';
+            scheduleMenuPress(14, 90);
+            hostRevealFrame = Math.trunc(Module._ps2web_frames()) + 250;
+          }
+        }
+      });
+      client.addEventListener('room', () => {
+        if (roomClient === client) modeStatus.textContent = `${client.room?.name || 'Room'} · ${client.peers.size + 1} online`;
+      });
+      client.addEventListener('close', () => {
+        if (roomClient !== client) return;
+        roomClient = null;
+        virtualLan = null;
+        hardwareMac = null;
+        menuPath = null;
+        technicalMenu = false;
+        hostRevealFrame = 0;
+        guestRevealFrame = 0;
+        hostSetupActive = false;
+        setMultiplayerTransitionHidden(false);
+        modeStatus.textContent = 'Room disconnected';
+        if (nativeMenu.active) { nativeMenu.status = 'Connection lost'; setNativeStage('error'); }
+      });
+      await client.ready;
+    } else roomClient.socket.send(JSON.stringify({ type: 'list' }));
+  } catch (error) {
+    nativeMenu.status = 'Rooms unavailable';
+    setNativeStage('error');
+  }
+}
+
+function scheduleMenuPress(bit, delay, duration = 12) {
+  const start = Math.trunc(Module._ps2web_frames()) + delay;
+  menuPresses.push({ bit, start, end: start + duration });
+}
+
+async function setMultiplayerTransitionHidden(hidden) {
+  const epoch = ++multiplayerTransitionEpoch;
+  if (hidden) {
+    // Reuse pixels produced by the game menu while emulation and rendering
+    // continue underneath. This never draws a separate HTML room interface.
+    try {
+      multiplayerTransitionFrame.src = canvas.toDataURL('image/png');
+      await multiplayerTransitionFrame.decode();
+      if (epoch !== multiplayerTransitionEpoch) return;
+      multiplayerTransitionFrame.style.display = 'block';
+    } catch {
+      if (epoch !== multiplayerTransitionEpoch) return;
+      canvas.style.visibility = 'hidden';
+    }
+  } else {
+    multiplayerTransitionFrame.style.display = 'none';
+    multiplayerTransitionFrame.removeAttribute('src');
+    canvas.style.visibility = '';
+  }
+  multiplayerTransitionHidden = hidden;
+}
+
+function waitForNativeMenuFrame() {
+  const target = Math.trunc(Module._ps2web_frames()) + 30;
+  return new Promise((resolve, reject) => {
+    const deadline = performance.now() + 180000;
+    const check = () => {
+      if (Module._ps2web_frames() >= target) resolve();
+      else if (performance.now() >= deadline) reject(new Error('Game menu did not update'));
+      else requestAnimationFrame(check);
     };
-    client.addEventListener('room', update);
-    client.addEventListener('packet', event => {
-      if (roomClient === client && selectedMode === 'multi') {
-        traceLanFrame('rx', event.detail);
-        Module.ps2NetworkRx?.(event.detail);
-      }
-    });
-    client.addEventListener('close', () => {
-      if (roomClient !== client) return;
-      roomClient = null;
-      virtualLan = null;
-      hardwareMac = null;
-      roomCopy.disabled = true;
-      roomInvite.hidden = true;
-      roomStatus.textContent = 'Sala desconectada. Entre novamente para continuar.';
-      modeStatus.textContent = 'Sala desconectada';
-      syncStartButton();
-    });
-    await client.ready;
-    if (roomClient !== client || attempt !== roomAttempt || selectedMode !== 'multi') return;
-    if (params.get('PS2_VIRTUAL_LAN_PROBE') === '1') {
-      const { VirtualLan } = await import('./virtual-lan.mjs');
-      if (roomClient !== client || attempt !== roomAttempt || selectedMode !== 'multi') return;
-      virtualLan = new VirtualLan(client.slot);
-    }
-    roomCopy.disabled = false;
-    roomInvite.hidden = false;
-    update();
-    syncStartButton();
+    requestAnimationFrame(check);
+  });
+}
+
+async function enterGameRoom(role) {
+  try {
+    const { VirtualLan } = await import('./virtual-lan.mjs');
+    virtualLan = new VirtualLan(roomClient.slot);
+    hardwareMac = null;
+    menuPath = role;
+    guestJoinScheduled = false;
+    if (!Module._ps2web_enable_virtual_lan?.(roomClient.slot, params.get('PS2_LAN_TRACE') === '1' ? 1 : 0))
+      throw new Error('Não foi possível configurar a rede virtual.');
+    modeStatus.textContent = `${roomClient.room.name} · ${roomClient.peers.size + 1} online`;
+    // Present the game's own busy menu once, then keep that native frame on
+    // screen while its legacy LAN and Host/Join screens run internally.
+    await waitForNativeMenuFrame();
+    if (!roomClient?.slot) throw new Error('Room disconnected');
+    await setMultiplayerTransitionHidden(true);
+    nativeMenu.active = false;
+    technicalMenu = true;
+    // Resume after the room has assigned its network slot. Select LAN Play
+    // internally, then choose Host/Join when that original menu opens.
+    Module._ps2web_resume_multiplayer();
+    scheduleMenuPress(6, 50);
+    scheduleMenuPress(14, 100);
   } catch (error) {
-    if (attempt !== roomAttempt || selectedMode !== 'multi') return;
-    roomStatus.textContent = 'Não foi possível conectar: ' + error.message;
-    syncStartButton();
+    setMultiplayerTransitionHidden(false);
+    nativeMenu.status = 'Could not join game';
+    setNativeStage('error');
   }
 }
 
-roomSetup.addEventListener('click', () => selectMode(selectedMode === 'solo' ? 'multi' : 'solo'));
-document.getElementById('room-create').addEventListener('click', () => joinRoom(true));
-document.getElementById('room-join').addEventListener('click', () => joinRoom(false));
-async function copyRoomInvite() {
-  if (!roomClient?.slot) return;
-  const invite = new URL(location.pathname, location.origin);
-  invite.searchParams.set('mode', 'multi');
-  invite.searchParams.set('room', roomCodeInput.value);
-  for (const key of ['ui', 'relay-url', 'card-seed', 'PS2_NETWORK_MENU_PROBE',
-                     'PS2_VIRTUAL_LAN_PROBE', 'PS2_MC_FS_PROBE', 'PS2_INPUT_PROBE',
-                     'PS2_CHUNK_WRITES'])
-    if (params.has(key)) invite.searchParams.set(key, params.get(key));
+const roomErrors = { bad_password: 'Incorrect PIN', room_full: 'Room is full', room_gone: 'Room closed',
+  room_preparing: 'Host is setting up', connection_closed: 'Connection closed',
+  invalid_room: 'Invalid room settings', invalid_player: 'Invalid player name',
+  server_full: 'Room server is full', connection_unavailable: 'Room server unavailable' };
+async function createGameRoom(visibility, capacity, password = '') {
   try {
-    await navigator.clipboard.writeText(invite.href);
-    roomStatus.textContent = 'Convite copiado. Abra-o em outro navegador e clique Entrar na sala.';
-    if (Module.running) note('Convite da sala copiado');
+    const name = `${playerName()}'s Room`;
+    nativeMenu.status = 'Creating room...';
+    setNativeStage('busy');
+    await roomClient.create({ playerName: playerName(), name,
+      visibility, password, capacity });
+    await enterGameRoom('host');
   } catch (error) {
-    roomStatus.textContent = 'Não foi possível copiar o convite: ' + error.message;
-    if (Module.running) note('Não foi possível copiar o convite');
+    nativeMenu.status = roomErrors[error.message] || error.message;
+    setNativeStage('error');
   }
 }
-roomCopy.addEventListener('click', copyRoomInvite);
-roomInvite.addEventListener('click', copyRoomInvite);
+async function joinSelectedRoom(password = '') {
+  if (!selectedRoom) return;
+  try {
+    nativeMenu.status = 'Joining room...';
+    setNativeStage('busy');
+    await roomClient.join(selectedRoom.id, playerName(), password);
+    await enterGameRoom('guest');
+  } catch (error) {
+    nativeMenu.status = roomErrors[error.message] || error.message;
+    setNativeStage('error');
+  }
+}
+
+function newPin() { return String(1000 + Math.floor(Math.random() * 9000)); }
+function nativeMenuAction(bit) {
+  const n = nativeMenu;
+  if (n.stage === 'busy') return;
+  if (bit === 4 || bit === 6) {
+    const next = Math.max(0, Math.min(2, n.index + (bit === 6 ? 1 : -1)));
+    if (next !== n.index) {
+      n.index = next;
+      scheduleMenuPress(bit, 1, 8);
+    }
+    return;
+  }
+  if (bit === 7 || bit === 5) {
+    if (n.stage === 'rooms') {
+      n.page = Math.max(0, Math.min(Math.ceil(availableRooms.length / 2) - 1,
+        n.page + (bit === 5 ? 1 : -1)));
+    } else if (n.stage === 'private_join' && n.index === 0)
+      n.digit = (n.digit + (bit === 5 ? 1 : 3)) % 4;
+    renderNativeMenu();
+    return;
+  }
+  if (bit === 12 || bit === 13) {
+    if (n.stage === 'rooms') { n.active = false; scheduleMenuPress(12, 1, 8); }
+    else if (n.stage === 'type') setNativeStage('rooms');
+    else if (n.stage === 'limit' || n.stage === 'private_create') setNativeStage('type');
+    else if (n.stage === 'private_join' || n.stage === 'error') setNativeStage('rooms');
+    return;
+  }
+  if (bit === 15 && n.stage === 'rooms') {
+    roomClient?.socket.send(JSON.stringify({ type: 'list' }));
+    return;
+  }
+  if (n.stage === 'private_join' && n.index === 0 && (bit === 14 || bit === 15)) {
+    const values = n.pin.split('');
+    values[n.digit] = String((Number(values[n.digit]) + (bit === 14 ? 1 : 9)) % 10);
+    n.pin = values.join('');
+    renderNativeMenu();
+    return;
+  }
+  if (bit !== 14) return;
+  if (n.stage === 'rooms') {
+    if (n.index === 0) setNativeStage('type');
+    else {
+      const room = availableRooms[n.page * 2 + n.index - 1];
+      if (!room) { roomClient?.socket.send(JSON.stringify({ type: 'list' })); return; }
+      if (room.state !== 'ready' || room.players >= room.capacity) return;
+      selectedRoom = room;
+      if (room.private) { n.pin = '0000'; n.digit = 0; setNativeStage('private_join'); }
+      else joinSelectedRoom();
+    }
+  } else if (n.stage === 'type') {
+    if (n.index === 0) setNativeStage('limit');
+    else if (n.index === 1) { n.pin = newPin(); setNativeStage('private_create'); }
+    else setNativeStage('rooms');
+  } else if (n.stage === 'limit') createGameRoom('public', n.index + 2);
+  else if (n.stage === 'private_create') {
+    if (n.index === 0) { n.pin = newPin(); renderNativeMenu(); }
+    else if (n.index === 1) createGameRoom('private', 4, n.pin);
+    else setNativeStage('type');
+  } else if (n.stage === 'private_join') {
+    if (n.index === 1) joinSelectedRoom(n.pin);
+    else if (n.index === 2) setNativeStage('rooms');
+  } else if (n.stage === 'error') setNativeStage('rooms');
+}
 
 function missingFeatures() {
   const header = [0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 2, 1, 0, 10];
@@ -662,7 +832,6 @@ function missingFeatures() {
   return missing;
 }
 const missing = missingFeatures();
-selectMode(selectedMode);
 
 const touchRoot = document.getElementById('touch'), knob = document.getElementById('knob');
 let touchPad = { buttons: 0, x: 0, y: 0, stick: false };
@@ -909,7 +1078,25 @@ const keyMap = {
 const stickKeys = new Set(['KeyA', 'KeyD', 'KeyI', 'KeyJ', 'KeyK', 'KeyL']);
 const isGameKey = (code) => Object.hasOwn(keyMap, code) || stickKeys.has(code);
 window.addEventListener('keydown', (e) => {
+  if (nativeMenu.active && nativeMenu.stage === 'private_join' && nativeMenu.index === 0 &&
+      /^(Digit|Numpad)[0-9]$/.test(e.code)) {
+    if (!e.repeat) {
+      const digits = nativeMenu.pin.split('');
+      digits[nativeMenu.digit] = e.code.at(-1);
+      nativeMenu.pin = digits.join('');
+      nativeMenu.digit = (nativeMenu.digit + 1) % 4;
+      renderNativeMenu();
+    }
+    e.preventDefault();
+    return;
+  }
   if (!isGameKey(e.code) || e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  const bit = keyMap[e.code];
+  if (nativeMenu.active && [4, 5, 6, 7, 12, 13, 14, 15].includes(bit)) {
+    if (!e.repeat) nativeMenuAction(bit);
+    e.preventDefault();
+    return;
+  }
   keys.add(e.code);
   e.preventDefault();
 });
@@ -966,6 +1153,41 @@ function pollPlayer(port, gamepad, own) {
       rx = axis(gamepad.axes[2]);
       ry = axis(gamepad.axes[3]);
     }
+  }
+  if (own && hostSetupActive) {
+    const cross = !!(buttons & (1 << 14));
+    const back = !!(buttons & (1 << 12));
+    if (back && !hostBackHeld) hostSetupCrosses = Math.max(0, hostSetupCrosses - 1);
+    if (cross && !hostCrossHeld) {
+      hostSetupCrosses++;
+      if (hostSetupCrosses === 2) {
+        hostSetupActive = false;
+        // The next native screen contains only a redundant Host Game action.
+        // Let this press confirm Weather, then confirm Host Game internally.
+        scheduleMenuPress(14, 140, 3);
+      }
+    }
+    hostCrossHeld = cross;
+    hostBackHeld = back;
+  }
+  if (own && nativeMenu.active) {
+    const handled = [4, 5, 6, 7, 12, 13, 14, 15];
+    let mask = 0;
+    for (const bit of handled) mask |= 1 << bit;
+    const held = buttons & mask;
+    for (const bit of handled) if ((held & (1 << bit)) && !(nativeMenu.held & (1 << bit))) nativeMenuAction(bit);
+    nativeMenu.held = held;
+    buttons = 0;
+    lx = ly = rx = ry = 128;
+  } else if (own && technicalMenu) {
+    // Only the scripted LAN/Host/Join path may navigate these old menus.
+    buttons = 0;
+    lx = ly = 128;
+  }
+  if (own) {
+    const frame = Module._ps2web_frames();
+    menuPresses = menuPresses.filter(press => press.end >= frame);
+    for (const press of menuPresses) if (frame >= press.start) buttons |= 1 << press.bit;
   }
   const state = buttons + lx * 65536 + ly * 16777216 + rx * 4294967296 + ry * 1099511627776;
   if (state !== player.pad) {
@@ -1152,6 +1374,39 @@ var Module = {
     statusEl.textContent = 'Halted: ' + reason;
     statusEl.style.color = '#f66';
   },
+  onMultiplayerScreen: (screen) => {
+    if (screen === 'browse') {
+      if (!menuPath && !nativeMenu.active) openMultiplayer();
+    } else if (screen === 'host_join' && menuPath) {
+      // LAN network setup has begun. The original Host/Join menu appears
+      // after its connection transition, around 300 frames later.
+      if (menuPath === 'guest') {
+        scheduleMenuPress(6, 400);
+        scheduleMenuPress(14, 450);
+      } else {
+        scheduleMenuPress(14, 400);
+        const capacity = roomClient?.room?.capacity || 4;
+        if (capacity < 4) {
+          modeStatus.textContent = 'Setting racer limit...';
+          scheduleMenuPress(6, 700);
+          scheduleMenuPress(6, 735);
+          for (let i = 0; i < 4 - capacity; i++) scheduleMenuPress(7, 770 + i * 35);
+          scheduleMenuPress(4, 770 + (4 - capacity) * 35);
+          scheduleMenuPress(4, 805 + (4 - capacity) * 35);
+          hostRevealFrame = Math.trunc(Module._ps2web_frames()) + 880 + (4 - capacity) * 35;
+        } else hostRevealFrame = Math.trunc(Module._ps2web_frames()) + 700;
+      }
+    } else if (screen === 'join_list' && menuPath === 'guest') {
+      modeStatus.textContent = 'Searching for host game...';
+    } else if (screen === 'lobby' && menuPath) {
+      if (menuPath === 'host') roomClient?.markReady();
+      nativeMenu.active = false;
+      hostSetupActive = false;
+      if (menuPath === 'guest' && multiplayerTransitionHidden)
+        guestRevealFrame = Math.trunc(Module._ps2web_frames()) + 20;
+      else { technicalMenu = false; setMultiplayerTransitionHidden(false); canvas.focus(); }
+    }
+  },
   onExec: (request) => {
     const name = request.path.split(/[\\/]/).pop().replace(/;1$/i, '').toUpperCase();
     const target = name === 'NTGUIDVD.ELF' ? '/ntgui/ps2web.html'
@@ -1259,7 +1514,7 @@ var Module = {
   audioQueuedMs: () => Module._ps2web_audio_queued_ms(),
   ps2CardSaved: () => storeCard(),
   ps2NetworkTx: (frame) => {
-    if (selectedMode !== 'multi' || !roomClient?.slot) return;
+    if (!roomClient?.slot) return;
     try {
       if (!hardwareMac && frame.length >= 12) hardwareMac = frame.slice(6, 12);
       const local = virtualLan?.respond(frame, roomClient.peers);
@@ -1281,7 +1536,7 @@ var Module = {
     catch (error) { console.warn('SMAP TX bridge:', error); }
   },
   ps2NetworkRx: (packet) => {
-    if (selectedMode !== 'multi' || !roomClient?.slot || !Module._ps2web_network_rx) return;
+    if (!roomClient?.slot || !Module._ps2web_network_rx) return;
     const bytes = new Uint8Array(packet);
     if (bytes.length < 14 || bytes.length > 1518) return;
     if (hardwareMac && bytes[0] === 2 && bytes[1] === 0 && bytes[2] === 0
@@ -1296,6 +1551,25 @@ var Module = {
   },
   onFrame: () => {
     pollInput();
+    if (hostRevealFrame && Module._ps2web_frames() >= hostRevealFrame) {
+      hostRevealFrame = 0;
+      nativeMenu.active = false;
+      if (menuPath === 'host') {
+        setMultiplayerTransitionHidden(false);
+        technicalMenu = false;
+        hostSetupActive = true;
+        hostSetupCrosses = 0;
+        hostCrossHeld = false;
+        hostBackHeld = false;
+      }
+      canvas.focus();
+    }
+    if (guestRevealFrame && Module._ps2web_frames() >= guestRevealFrame) {
+      guestRevealFrame = 0;
+      setMultiplayerTransitionHidden(false);
+      technicalMenu = false;
+      canvas.focus();
+    }
     ++frames;
     fresh = true;
     const now = performance.now();
@@ -1379,12 +1653,9 @@ if (missing.length) {
 }
 
 startButton.addEventListener('click', async () => {
-  if (selectedMode === 'multi' && !roomClient?.slot) return;
-  if (virtualLan) {
-    if (!Module._ps2web_enable_virtual_lan?.(roomClient.slot, params.get('PS2_LAN_TRACE') === '1' ? 1 : 0)) {
-      statusEl.textContent = 'Não foi possível iniciar a rede virtual.';
-      return;
-    }
+  if (!Module._ps2web_enable_virtual_lan?.(1, params.get('PS2_LAN_TRACE') === '1' ? 1 : 0)) {
+    statusEl.textContent = 'Não foi possível iniciar a rede virtual.';
+    return;
   }
   document.getElementById('overlay').remove();
   canvas.focus();

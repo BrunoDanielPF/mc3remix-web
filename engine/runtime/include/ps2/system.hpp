@@ -65,6 +65,8 @@ struct Options {
     // Complete Ethernet frame from the opt-in SMAP diagnostic device.
     // The callback runs on the emulation thread; consumers must copy the bytes.
     std::function<void(const std::uint8_t *frame, std::size_t size, bool loopback)> on_smap_tx;
+    // MC3's recompilation calls this only when a multiplayer menu screen opens.
+    std::function<void(int screen)> on_multiplayer_screen;
     std::string save_state_path;
     std::uint64_t save_state_frame = 0;
 };

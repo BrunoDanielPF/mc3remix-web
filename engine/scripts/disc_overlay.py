@@ -141,7 +141,7 @@ def main():
     try:
         count, size = build_dave_overlay(args.iso, args.archive, args.asset,
                                          args.replacement, args.manifest)
-        DiscOverlay(args.manifest, args.iso)
+        DiscOverlay([args.manifest], args.iso)
     except (OSError, ValueError, KeyError, TypeError, zlib.error) as exc:
         parser.exit(1, f"error: {exc}\n")
     print(f"overlay ready: {count} entries, {size} bytes each; source ISO unchanged")

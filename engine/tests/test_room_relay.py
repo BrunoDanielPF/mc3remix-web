@@ -41,6 +41,13 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(welcome["version"], 1)
         return client, welcome
 
+    async def browse(self):
+        client = await connect(f"ws://127.0.0.1:{self.port}/v2/network", proxy=None)
+        self.clients.append(client)
+        listing = json.loads(await asyncio.wait_for(client.recv(), 1))
+        self.assertEqual(listing["type"], "rooms")
+        return client, listing
+
     async def test_room_isolation_binary_and_disconnect(self):
         room_a = "a" * 32
         room_b = "b" * 32
@@ -112,6 +119,58 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ConnectionClosed) as closed:
             await invalid.recv()
         self.assertEqual(closed.exception.rcvd.code, 1008)
+
+    async def test_game_room_create_ready_join_and_host_departure(self):
+        host, _ = await self.browse()
+        guest, _ = await self.browse()
+        await host.send(json.dumps({"type": "create", "name": "Cruise noturno", "visibility": "public",
+                                    "capacity": 2, "playerName": "Ana"}))
+        created = json.loads(await host.recv())
+        self.assertEqual((created["type"], created["slot"], created["host"]), ("joined", 1, True))
+        room_id = created["room"]["id"]
+        self.assertEqual(created["room"]["state"], "preparing")
+        listing = json.loads(await guest.recv())
+        self.assertEqual(listing["rooms"][0]["name"], "Cruise noturno")
+        await guest.send(json.dumps({"type": "join", "roomId": room_id, "playerName": "Beto"}))
+        self.assertEqual(json.loads(await guest.recv())["code"], "room_preparing")
+        await host.send(json.dumps({"type": "ready"}))
+        self.assertEqual(json.loads(await host.recv())["type"], "room_ready")
+        self.assertEqual(json.loads(await guest.recv())["rooms"][0]["state"], "ready")
+        await guest.send(json.dumps({"type": "join", "roomId": room_id, "playerName": "Beto"}))
+        joined = json.loads(await guest.recv())
+        self.assertEqual((joined["slot"], joined["room"]["capacity"]), (2, 2))
+        self.assertEqual(json.loads(await host.recv())["type"], "peer_joined")
+        await guest.send(b"\x00\xffgame frame")
+        self.assertEqual(await host.recv(), b"\x00\xffgame frame")
+        extra, _ = await self.browse()
+        await extra.send(json.dumps({"type": "join", "roomId": room_id, "playerName": "Caio"}))
+        self.assertEqual(json.loads(await extra.recv())["code"], "room_full")
+        await host.close()
+        with self.assertRaises(ConnectionClosed) as closed:
+            await guest.recv()
+        self.assertEqual(closed.exception.rcvd.code, 1012)
+        self.assertNotIn(room_id, self.relay.game_rooms)
+
+    async def test_private_room_password_and_listing(self):
+        host, _ = await self.browse()
+        guest, _ = await self.browse()
+        await host.send(json.dumps({"type": "create", "name": "Amigos", "visibility": "private",
+                                    "password": "1234", "capacity": 4, "playerName": "Ana"}))
+        created = json.loads(await host.recv())
+        room_id = created["room"]["id"]
+        listing = json.loads(await guest.recv())
+        self.assertTrue(listing["rooms"][0]["private"])
+        self.assertNotIn("1234", json.dumps(listing))
+        await host.send(json.dumps({"type": "ready"}))
+        self.assertEqual(json.loads(await host.recv())["type"], "room_ready")
+        self.assertEqual(json.loads(await guest.recv())["type"], "rooms")
+        await guest.send(json.dumps({"type": "join", "roomId": room_id,
+                                    "playerName": "Beto", "password": "wrong"}))
+        self.assertEqual(json.loads(await guest.recv())["code"], "bad_password")
+        await guest.send(json.dumps({"type": "join", "roomId": room_id,
+                                    "playerName": "Beto", "password": "1234"}))
+        self.assertEqual(json.loads(await guest.recv())["type"], "joined")
+        self.assertEqual(json.loads(await host.recv())["type"], "peer_joined")
 
 
 if __name__ == "__main__":
